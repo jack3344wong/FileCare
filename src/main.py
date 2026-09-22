@@ -37,7 +37,7 @@ def _notify_existing_instance():
 
 
 def _start_local_server(app):
-    """启动本地服务器，监听来自新实例的激活请求。"""
+    """启动本地服务器，监听来自新实例的激活请求或卸载关闭请求。"""
     from PyQt5.QtWidgets import QApplication as QA
     
     server = QLocalServer()
@@ -59,6 +59,13 @@ def _start_local_server(app):
                             widget.raise_()
                             widget.activateWindow()
                             break
+                elif data == b"shutdown":
+                    # 优雅关闭（用于卸载前）
+                    for widget in QA.topLevelWidgets():
+                        if widget.objectName() == "DiskMonitorMainWindow":
+                            widget.close()
+                            break
+                    QA.quit()
             conn.disconnectFromServer()
     
     server.newConnection.connect(on_new_connection)
@@ -157,7 +164,8 @@ def main():
         resource_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
         icon_path = resource_root / "assets" / "filecare.ico"
         if icon_path.is_file():
-            app.setWindowIcon(QIcon(str(icon_path)))
+            icon = QIcon(str(icon_path))
+            app.setWindowIcon(icon)
         app.setStyle("Fusion")  # 统一跨平台基础样式，QSS 在此基础上叠加
 
         # 启动本地服务器，监听新实例的激活请求
@@ -166,7 +174,14 @@ def main():
         from main_window import DiskMonitor
         window = DiskMonitor()
         window.setObjectName("DiskMonitorMainWindow")
-        window.show()
+        
+        # 读取启动时最小化设置
+        from settings import get_settings
+        settings = get_settings()
+        if settings.get("general", "start_minimized", False):
+            window.hide()  # 启动时隐藏窗口
+        else:
+            window.show()
 
         if "--smoke-test" in sys.argv:
             # 发布构建自检：验证真实窗口和所有延迟加载的文档解析模块。

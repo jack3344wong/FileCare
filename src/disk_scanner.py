@@ -101,11 +101,14 @@ class DiskScannerThread(QThread):
     finished_signal = pyqtSignal(dict)
     error_signal = pyqtSignal(str)
 
-    def __init__(self, root_path, threshold_mb=100.0, top_n=100, *args, **kwargs):
+    def __init__(self, root_path, threshold_mb=100.0, folder_threshold_mb=1024.0, top_n=100, exclude_dirs=None, exclude_patterns=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.root_path = os.path.abspath(root_path)
         self.threshold_bytes = max(0, int(float(threshold_mb) * 1024 * 1024))
+        self.folder_threshold_bytes = max(0, int(float(folder_threshold_mb) * 1024 * 1024))
         self.top_n = max(1, int(top_n))
+        self.exclude_dirs = [os.path.normcase(d) for d in (exclude_dirs or [])]
+        self.exclude_patterns = [p.lower() for p in (exclude_patterns or [])]
         self._cancel_requested = False
 
     def cancel(self):
@@ -148,6 +151,9 @@ class DiskScannerThread(QThread):
                 kept_dirs = []
                 for name in dirs:
                     full = os.path.join(root, name)
+                    # 排除目录检查
+                    if self.exclude_dirs and os.path.normcase(full) in self.exclude_dirs:
+                        continue
                     try:
                         st = os.stat(full, follow_symlinks=False)
                         attrs = getattr(st, "st_file_attributes", 0)
@@ -170,6 +176,11 @@ class DiskScannerThread(QThread):
                     if self._cancel_requested:
                         result["cancelled"] = True
                         break
+                    # 排除文件类型检查
+                    if self.exclude_patterns:
+                        ext = os.path.splitext(name)[1].lower()
+                        if any(ext == pattern or ext == f".{pattern}" for pattern in self.exclude_patterns):
+                            continue
                     path = os.path.join(root, name)
                     try:
                         st = os.stat(path, follow_symlinks=False)
@@ -294,7 +305,7 @@ class DiskScannerThread(QThread):
                 {"name": os.path.basename(path) or path, "path": path,
                  "size": totals.get(path, 0), "allocated": allocated_totals.get(path, 0),
                  "file_count": file_totals.get(path, 0), "folder_count": folder_totals.get(path, 0)}
-                for path in all_dirs if totals.get(path, 0) >= self.threshold_bytes
+                for path in all_dirs if totals.get(path, 0) >= self.folder_threshold_bytes
             ]
             result["large_files"].sort(key=lambda x: x["allocated"], reverse=True)
             result["large_folders"].sort(key=lambda x: x["allocated"], reverse=True)

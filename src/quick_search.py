@@ -24,8 +24,14 @@ from PyQt5.QtCore import QThread, pyqtSignal
 
 # ─── 索引数据库路径 ───────────────────────────────────────────────────────────
 def _get_db_path() -> str:
-    """索引数据库存储在 ~/.diskwise/index.db"""
-    base = Path.home() / ".diskwise"
+    """索引数据库路径 - 从配置读取，默认 ~/.diskwise/index.db"""
+    from settings import get_settings
+    settings = get_settings()
+    custom_path = settings.get("scan", "index_db_path", "")
+    if custom_path:
+        base = Path(custom_path)
+    else:
+        base = Path.home() / ".diskwise"
     base.mkdir(parents=True, exist_ok=True)
     return str(base / "index.db")
 

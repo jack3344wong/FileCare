@@ -25,8 +25,14 @@ from content_extractor import ContentExtractor, SUPPORTED_EXTENSIONS
 
 # ─── 索引数据库路径 ───────────────────────────────────────────────────────────
 def _get_fts_db_path() -> str:
-    """全文索引数据库存储在 ~/.diskwise/fulltext.db"""
-    base = Path.home() / ".diskwise"
+    """全文索引数据库路径 - 从配置读取，默认 ~/.diskwise/fulltext.db"""
+    from settings import get_settings
+    settings = get_settings()
+    custom_path = settings.get("scan", "index_db_path", "")
+    if custom_path:
+        base = Path(custom_path)
+    else:
+        base = Path.home() / ".diskwise"
     base.mkdir(parents=True, exist_ok=True)
     return str(base / "fulltext.db")
 

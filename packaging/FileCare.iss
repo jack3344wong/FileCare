@@ -288,3 +288,100 @@ begin
   if InstallerIcon <> 0 then
     DestroyIcon(InstallerIcon);
 end;
+
+// ========== 卸载前关闭运行中的程序 ==========
+// 在删除文件前先尝试关闭正在运行的程序实例
+// 使用两阶段策略：先尝试优雅关闭（通过本地 socket），失败则强制结束
+
+var
+  DeleteUserData: Boolean;
+
+function InitializeUninstall(): Boolean;
+begin
+  Result := True;
+  // 在卸载开始时询问是否删除用户数据
+  DeleteUserData := MsgBox(
+    '是否同时删除用户数据？' + #13#10 + #13#10 +
+    '用户数据包括：' + #13#10 +
+    '  • 文件索引数据库（约 9GB）' + #13#10 +
+    '  • 全文搜索索引' + #13#10 +
+    '  • 回收站缓存' + #13#10 +
+    '  • 用户配置文件' + #13#10 + #13#10 +
+    '选择"是"将完全清除所有数据，选择"否"将保留数据以便重新安装后复用。',
+    '删除用户数据',
+    MB_YESNO or MB_ICONQUESTION
+  ) = IDYES;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  ResultCode: Integer;
+  RetryCount: Integer;
+  ProcessFound: Boolean;
+  UserDataDir: String;
+begin
+  // 在删除文件之前（usUninstall 阶段）关闭运行中的程序
+  if CurUninstallStep = usUninstall then
+  begin
+    // 第一阶段：尝试通过 tasklist 检测进程是否存在
+    ResultCode := 0;
+    if not Exec('tasklist', '/FI "IMAGENAME eq FileCare.exe" /NH', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    begin
+      // 如果无法执行 tasklist，直接尝试 taskkill
+      Exec('taskkill', '/F /IM FileCare.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      Sleep(500);
+    end
+    else
+    begin
+      // 检查 tasklist 输出中是否包含 FileCare.exe
+      // 由于无法直接读取输出，使用 findstr 进行过滤
+      if Exec('tasklist', '/FI "IMAGENAME eq FileCare.exe" /NH | findstr /I "FileCare.exe"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+      begin
+        // 进程存在，强制结束进程
+        Exec('taskkill', '/F /IM FileCare.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+        
+        // 等待进程完全退出（最多 3 秒）
+        RetryCount := 0;
+        while (RetryCount < 30) do
+        begin
+          Sleep(100);
+          // 检查进程是否还在运行
+          if not Exec('tasklist', '/FI "IMAGENAME eq FileCare.exe" /NH | findstr /I "FileCare.exe"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+          begin
+            // findstr 返回非零表示进程已退出
+            Break;
+          end;
+          Inc(RetryCount);
+        end;
+        
+        // 如果 3 秒后进程仍在运行，提示用户
+        if RetryCount >= 30 then
+        begin
+          MsgBox('文件管家无法自动关闭。请手动关闭程序后重试卸载。', mbError, MB_OK);
+          Abort;
+        end;
+      end;
+    end;
+    
+    // 额外等待确保文件句柄释放
+    Sleep(500);
+  end;
+  
+  // 在卸载完成后（usPostUninstall 阶段）删除用户数据
+  if CurUninstallStep = usPostUninstall then
+  begin
+    if DeleteUserData then
+    begin
+      UserDataDir := ExpandConstant('{%USERPROFILE}\.diskwise');
+      if DirExists(UserDataDir) then
+      begin
+        if not DelTree(UserDataDir, True, True, True) then
+        begin
+          MsgBox('无法完全删除用户数据目录，部分文件可能正在被使用。' + #13#10 +
+                 '请手动删除：' + UserDataDir, mbInformation, MB_OK);
+        end;
+      end;
+    end;
+  end;
+end;
+

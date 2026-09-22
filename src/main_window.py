@@ -29,6 +29,8 @@ from quick_search import QuickSearchEngine
 from fulltext_search import FullTextSearchEngine
 from content_extractor import ContentExtractor
 from treemap_widget import TreemapWidget
+from settings import get_settings
+from settings_page import SettingsPage
 
 
 APP_NAME_ZH = "文件管家"
@@ -122,6 +124,7 @@ TRANSLATIONS = {
         "home": "首页", "file_browse": "文件管理",
         "nav_home": "🏠 首页", "nav_browse": "📂 文件管理", "nav_scan": "🧹 大文件清理",
         "nav_visualization": "📊 空间可视化", "nav_search": "🔍 快速搜索", "nav_recycle": "🗑️ 回收站管理",
+        "nav_settings": "⚙️ 设置",
         "search": "搜索当前目录...", "language": "语言", "language_zh": "中文", "language_en": "English", "back": "返回上一位置", "up": "返回上级目录", "root": "返回磁盘根目录",
         "file_details": "文件详情", "scan_tab": "空间扫描", "detail_title": "文件与软件详情", "disk_usage": "磁盘使用情况",
         "name": "名称", "full_path": "完整路径", "size": "大小", "mtime": "修改时间", "item_type": "项目类型",
@@ -165,6 +168,7 @@ TRANSLATIONS = {
         "home": "Home", "file_browse": "File Browser",
         "nav_home": "🏠 Home", "nav_browse": "📂 Files", "nav_scan": "🧹 Large File Cleanup",
         "nav_visualization": "📊 Space Visualization", "nav_search": "🔍 Quick Search", "nav_recycle": "🗑️ Recycle Bin",
+        "nav_settings": "⚙️ Settings",
         "search": "Search current folder...", "language": "Language", "language_zh": "Chinese", "language_en": "English", "back": "Previous Location", "up": "Parent Folder", "root": "Drive Root",
         "file_details": "File Details", "scan_tab": "Space Scan", "detail_title": "File & Software Details", "disk_usage": "Disk Usage",
         "name": "Name", "full_path": "Full Path", "size": "Size", "mtime": "Modified", "item_type": "Item Type",
@@ -240,25 +244,50 @@ M_GREEN = "#27ae60"
 M_ORANGE = "#e67e22"
 M_RED = "#e74c3c"
 
+# 补充浅色主题细粒度颜色（供 StyleSheet 模板使用）
+M_TOOLBAR = "#fafbfc"          # 顶部工具栏背景
+M_HOVER_BG = "#eef3ff"         # 悬停/选中背景
+M_HOVER_BORDER = "#b8d4f0"     # 悬停边框
+M_DISABLED_TEXT = "#c0c8d0"    # 禁用文字
+M_PRIMARY_DISABLED = "#a8c8e8" # 主按钮禁用背景
+M_DANGER_BORDER = "#f5c6c6"    # 危险按钮边框
+M_DANGER_HOVER = "#fdf0f0"     # 危险按钮悬停背景
+M_RED_HOVER = "#c0392b"        # 危险实心按钮悬停
+M_CHIP_ACTIVE = "#e8f4fd"      # 筛选 chip 激活背景
+M_ACTIONCARD_HOVER = "#c5d8f5" # 快捷卡片悬停边框
+M_HEADING = "#1a2332"          # 首页大标题
+M_PATH_BAR_TEXT = "#52606d"    # 路径栏文字
+M_INPUT_FOCUS = "#ffffff"      # 输入框聚焦背景
+M_DROPDOWN_BG = "#ffffff"      # 下拉列表背景
+M_DROPDOWN_SEL = "rgba(74,144,217,0.18)"  # 下拉选中背景
+M_DROPDOWN_SEL_TEXT = "#163a59"           # 下拉选中文字
+M_ALT_ROW = "#fafbfc"          # 表格交替行
+M_MENU_SEL_TEXT = "#163a59"    # 菜单选中文字
+M_PROGRESS_END = "#6cb4f0"     # 进度条渐变终点
+M_SCROLLBAR = "#d5dae0"        # 滚动条滑块
+M_SCROLLBAR_HOVER = "#b8c0c9"  # 滚动条滑块悬停
+M_CHECKBOX_BORDER = "#d0d5db"  # 复选框边框
+
 STYLESHEET = """
 * { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; }
 QMainWindow { background:%(bg)s; color:%(text)s; }
 QWidget#page { background:%(bg)s; }
-QFrame#toolbar { background:#fafbfc; border-bottom:1px solid %(border)s; min-height:52px; max-height:52px; }
+QFrame#toolbar { background:%(toolbar)s; border-bottom:1px solid %(border)s; min-height:52px; max-height:52px; }
 QLabel#title { font-size:15px; font-weight:700; color:%(text)s; padding:8px; }
 QLabel#sectionTitle { font-size:15px; font-weight:600; color:%(text)s; padding:4px 0 8px 0; }
 QLabel#key { color:%(text3)s; font-size:12px; }
 QLabel#value { color:%(text)s; font-size:12px; }
-QLabel#pathBar { background:%(cardoft)s; border:1px solid %(border2)s; border-radius:6px; padding:7px 9px; color:#52606d; }
+QLabel#pathBar { background:%(cardoft)s; border:1px solid %(border2)s; border-radius:6px; padding:7px 9px; color:%(pathbartext)s; }
 QFrame#sidebar, QFrame#card { background:%(card)s; border:1px solid %(border)s; border-radius:12px; }
 QFrame#statusBar { background:%(cardoft)s; border-top:1px solid %(border)s; }
 
 /* ── 顶部导航标签（下划线式，Minimalism） ── */
 QPushButton#navTab {
     background:transparent; border:none; border-bottom:2.5px solid transparent;
-    color:%(text2)s; font-size:14px; padding:13px 20px 11px 20px; border-radius:0; min-height:0;
+    color:%(text2)s; font-size:14px; padding:13px 24px 11px 24px; border-radius:0; min-height:0;
+    margin:0 2px;
 }
-QPushButton#navTab:hover { color:%(accent)s; background:rgba(74,144,217,0.06); }
+QPushButton#navTab:hover { color:%(accent)s; background:%(navtabs_hover)s; }
 QPushButton#navTab[class="active"] { color:%(accent)s; border-bottom:2.5px solid %(accent)s; font-weight:600; background:transparent; }
 
 /* ── 按钮 ── */
@@ -266,38 +295,38 @@ QPushButton {
     min-height:30px; padding:6px 14px; border-radius:8px;
     border:1px solid %(border2)s; background:%(card)s; color:%(text)s; font-size:13px;
 }
-QPushButton:hover { border-color:#b8d4f0; background:#eef3ff; }
-QPushButton:disabled { color:#c0c8d0; background:%(cardoft)s; border-color:%(border)s; }
+QPushButton:hover { border-color:%(hoverborder)s; background:%(hoverbg)s; }
+QPushButton:disabled { color:%(disabledtext)s; background:%(cardoft)s; border-color:%(border)s; }
 QPushButton#primary { background:%(accent)s; color:white; border:1px solid %(accent)s; font-weight:500; }
 QPushButton#primary:hover { background:%(accenthover)s; border-color:%(accenthover)s; }
-QPushButton#primary:disabled { background:#a8c8e8; border-color:#a8c8e8; color:white; }
-QPushButton#danger { color:%(red)s; border-color:#f5c6c6; background:%(card)s; }
-QPushButton#danger:hover { background:#fdf0f0; border-color:%(red)s; }
+QPushButton#primary:disabled { background:%(primarydisabled)s; border-color:%(primarydisabled)s; color:white; }
+QPushButton#danger { color:%(red)s; border-color:%(dangerborder)s; background:%(card)s; }
+QPushButton#danger:hover { background:%(dangerhover)s; border-color:%(red)s; }
 QPushButton#dangerSolid { background:%(red)s; color:white; border:1px solid %(red)s; }
-QPushButton#dangerSolid:hover { background:#c0392b; }
-QPushButton#success { color:%(accent)s; border-color:#b8d4f0; background:%(card)s; }
-QPushButton#success:hover { background:#eef3ff; }
+QPushButton#dangerSolid:hover { background:%(redhover)s; }
+QPushButton#success { color:%(accent)s; border-color:%(hoverborder)s; background:%(card)s; }
+QPushButton#success:hover { background:%(hoverbg)s; }
 QPushButton#action, QPushButton#deleteAction { min-height:40px; padding:9px 14px; text-align:left; }
-QPushButton#deleteAction { color:%(red)s; border-color:#f5c6c6; }
-QPushButton#deleteAction:hover { background:#fdf0f0; border-color:%(red)s; color:%(red)s; }
+QPushButton#deleteAction { color:%(red)s; border-color:%(dangerborder)s; }
+QPushButton#deleteAction:hover { background:%(dangerhover)s; border-color:%(red)s; color:%(red)s; }
 QPushButton#chip {
-    border:1px solid %(border2)s; color:%(text2)s; background:#fafbfc;
+    border:1px solid %(border2)s; color:%(text2)s; background:%(toolbar)s;
     border-radius:20px; padding:5px 14px; min-height:0; font-size:12px;
 }
-QPushButton#chip:hover { border-color:#b8d4f0; color:%(accent)s; }
-QPushButton#chip[class="active"] { background:#e8f4fd; border-color:#b8d4f0; color:%(accent)s; }
+QPushButton#chip:hover { border-color:%(hoverborder)s; color:%(accent)s; }
+QPushButton#chip[class="active"] { background:%(chipactive)s; border-color:%(hoverborder)s; color:%(accent)s; }
 QPushButton#navBack { padding:6px 14px; font-size:12px; color:%(text2)s; background:%(cardoft)s; }
-QPushButton#navBack:hover { background:#eef3ff; border-color:#b8d4f0; color:%(accent)s; }
+QPushButton#navBack:hover { background:%(hoverbg)s; border-color:%(hoverborder)s; color:%(accent)s; }
 
 /* ── 首页快捷操作卡片 ── */
 QPushButton#actionCard {
     background:%(cardoft)s; border:1px solid %(border)s; border-radius:12px;
     text-align:left; min-height:86px; padding:0px;
 }
-QPushButton#actionCard:hover { background:#eef3ff; border-color:#c5d8f5; }
+QPushButton#actionCard:hover { background:%(hoverbg)s; border-color:%(actioncardhover)s; }
 QLabel#actionTitle { font-size:13px; font-weight:600; color:%(text)s; }
 QLabel#actionSub { font-size:11px; color:%(text3)s; }
-QLabel#homeGreeting { font-size:24px; font-weight:700; color:#1a2332; }
+QLabel#homeGreeting { font-size:24px; font-weight:700; color:%(heading)s; }
 QLabel#homeGreetingSub { font-size:13px; color:%(text3)s; }
 QLabel#diskPct { font-size:26px; font-weight:700; }
 QLabel#diskName { font-size:14px; font-weight:600; color:%(text)s; }
@@ -321,29 +350,29 @@ QLineEdit {
     min-height:34px; border:1.5px solid %(border2)s; border-radius:10px;
     padding:2px 12px; background:%(cardoft)s; font-size:13px; color:%(text)s;
 }
-QLineEdit:focus { border-color:%(accent)s; background:white; }
+QLineEdit:focus { border-color:%(accent)s; background:%(inputfocus)s; }
 QComboBox {
     min-height:32px; border:1px solid %(border2)s; border-radius:8px;
     padding:2px 10px; background:%(card)s; font-size:13px; color:%(text)s;
 }
-QComboBox:hover { border-color:#b8d4f0; }
+QComboBox:hover { border-color:%(hoverborder)s; }
 QComboBox::drop-down { border:none; width:22px; }
 QSpinBox, QDoubleSpinBox { min-height:30px; border:1px solid %(border2)s; border-radius:8px; padding:2px 8px; background:%(card)s; }
 QComboBox QAbstractItemView {
-    background:white; color:%(text)s; border:1px solid %(border2)s; outline:0;
-    selection-background-color:rgba(74,144,217,0.18); selection-color:#163a59;
+    background:%(dropdownbg)s; color:%(text)s; border:1px solid %(border2)s; outline:0;
+    selection-background-color:%(dropdownsel)s; selection-color:%(dropdownseltext)s;
 }
 QComboBox QAbstractItemView::item { min-height:30px; padding:4px 10px; }
-QComboBox QAbstractItemView::item:hover { background:#eef3ff; }
+QComboBox QAbstractItemView::item:hover { background:%(hoverbg)s; }
 
 /* ── 列表/树 ── */
 QTreeWidget {
     background:%(card)s; border:1px solid %(border)s; border-radius:10px;
-    alternate-background-color:#fafbfc; font-size:13px;
+    alternate-background-color:%(altrow)s; font-size:13px;
 }
 QTreeWidget::item { min-height:30px; padding:4px 6px; border-bottom:1px solid %(bg)s; }
 QTreeWidget::item:hover { background:%(cardoft)s; }
-QTreeWidget::item:selected { background:#eef3ff; color:%(text)s; }
+QTreeWidget::item:selected { background:%(hoverbg)s; color:%(text)s; }
 QHeaderView::section {
     background:%(cardoft)s; border:none; border-bottom:1px solid %(border)s;
     padding:8px; font-weight:500; color:%(text2)s; font-size:12px;
@@ -353,36 +382,36 @@ QListWidget {
 }
 QListWidget::item { min-height:32px; padding:6px 10px; border-bottom:1px solid %(bg)s; }
 QListWidget::item:hover { background:%(cardoft)s; }
-QListWidget::item:selected { background:#eef3ff; color:%(text)s; }
+QListWidget::item:selected { background:%(hoverbg)s; color:%(text)s; }
 
 /* ── 菜单 ── */
-QMenu { background:white; color:%(text)s; border:1px solid %(border)s; border-radius:10px; padding:6px; }
+QMenu { background:%(dropdownbg)s; color:%(text)s; border:1px solid %(border)s; border-radius:10px; padding:6px; }
 QMenu::item { padding:8px 28px 8px 12px; border-radius:6px; font-size:13px; }
-QMenu::item:selected { background:#eef3ff; color:#163a59; }
+QMenu::item:selected { background:%(hoverbg)s; color:%(menuseltext)s; }
 QMenu::separator { height:1px; background:%(border)s; margin:4px 8px; }
 
 /* ── 标签页（扫描结果区） ── */
 QTabWidget::pane { border:1px solid %(border)s; border-radius:10px; background:%(card)s; top:-1px; }
 QTabBar { background:transparent; }
 QTabBar::tab {
-    padding:9px 18px; color:%(text2)s; font-size:13px;
-    border:none; border-bottom:2px solid transparent; margin-right:2px; background:transparent;
+    padding:9px 40px; color:%(text2)s; font-size:13px; min-width:80px;
+    border:none; border-bottom:2px solid transparent; margin-right:4px; background:transparent;
 }
 QTabBar::tab:hover { color:%(accent)s; }
 QTabBar::tab:selected { color:%(accent)s; border-bottom:2px solid %(accent)s; font-weight:600; }
 
 /* ── 进度条 ── */
 QProgressBar { border:0; background:%(border)s; border-radius:4px; min-height:8px; max-height:8px; text-align:center; }
-QProgressBar::chunk { background:qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 %(accent)s, stop:1 #6cb4f0); border-radius:4px; }
+QProgressBar::chunk { background:qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 %(accent)s, stop:1 %(progressend)s); border-radius:4px; }
 
 /* ── 滚动条（细线风格） ── */
 QScrollBar:vertical { background:transparent; width:10px; margin:2px; }
-QScrollBar::handle:vertical { background:#d5dae0; border-radius:4px; min-height:30px; }
-QScrollBar::handle:vertical:hover { background:#b8c0c9; }
+QScrollBar::handle:vertical { background:%(scrollbar)s; border-radius:4px; min-height:30px; }
+QScrollBar::handle:vertical:hover { background:%(scrollbarhover)s; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }
 QScrollBar:horizontal { background:transparent; height:10px; margin:2px; }
-QScrollBar::handle:horizontal { background:#d5dae0; border-radius:4px; min-width:30px; }
-QScrollBar::handle:horizontal:hover { background:#b8c0c9; }
+QScrollBar::handle:horizontal { background:%(scrollbar)s; border-radius:4px; min-width:30px; }
+QScrollBar::handle:horizontal:hover { background:%(scrollbarhover)s; }
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width:0; }
 
 /* ── 文本编辑区 ── */
@@ -393,19 +422,36 @@ QPlainTextEdit, QTextEdit {
 
 /* ── 复选框 ── */
 QCheckBox { spacing:8px; font-size:13px; color:%(text)s; }
-QCheckBox::indicator { width:17px; height:17px; border:1.5px solid #d0d5db; border-radius:4px; background:white; }
+QCheckBox::indicator { width:17px; height:17px; border:1.5px solid %(checkboxborder)s; border-radius:4px; background:%(dropdownbg)s; }
 QCheckBox::indicator:hover { border-color:%(accent)s; }
-QCheckBox::indicator:checked { background:%(accent)s; border-color:%(accent)s; image:none; }
+QCheckBox::indicator:checked { background:white; border-color:%(accent)s; image:url(data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M3 8l3 3 7-7' stroke='%(accent)s' stroke-width='2' fill='none'/></svg>); }
 
 /* ── 工具提示 ── */
-QToolTip { background:white; color:%(text)s; border:1px solid %(border2)s; border-radius:6px; padding:6px 10px; font-size:12px; }
+QToolTip { background:%(dropdownbg)s; color:%(text)s; border:1px solid %(border2)s; border-radius:6px; padding:6px 10px; font-size:12px; }
 
 QDialog { background:%(bg)s; }
-""" % {
+"""
+
+# 浅色主题颜色字典（供 STYLESHEET 模板填充）
+_LIGHT_COLORS = {
     "bg": M_BG, "card": M_CARD, "cardoft": M_CARD_SOFT, "border": M_BORDER, "border2": M_BORDER_2,
     "text": M_TEXT, "text2": M_TEXT_2, "text3": M_TEXT_3,
     "accent": M_ACCENT, "accenthover": M_ACCENT_HOVER, "green": M_GREEN, "red": M_RED,
+    "toolbar": M_TOOLBAR, "hoverbg": M_HOVER_BG, "hoverborder": M_HOVER_BORDER,
+    "disabledtext": M_DISABLED_TEXT, "primarydisabled": M_PRIMARY_DISABLED,
+    "dangerborder": M_DANGER_BORDER, "dangerhover": M_DANGER_HOVER, "redhover": M_RED_HOVER,
+    "chipactive": M_CHIP_ACTIVE, "actioncardhover": M_ACTIONCARD_HOVER,
+    "heading": M_HEADING, "pathbartext": M_PATH_BAR_TEXT,
+    "navtabs_hover": "rgba(74,144,217,0.06)",
+    "inputfocus": M_INPUT_FOCUS, "dropdownbg": M_DROPDOWN_BG,
+    "dropdownsel": M_DROPDOWN_SEL, "dropdownseltext": M_DROPDOWN_SEL_TEXT,
+    "altrow": M_ALT_ROW, "menuseltext": M_MENU_SEL_TEXT,
+    "progressend": M_PROGRESS_END, "scrollbar": M_SCROLLBAR,
+    "scrollbarhover": M_SCROLLBAR_HOVER, "checkboxborder": M_CHECKBOX_BORDER,
 }
+
+# 初始样式表（浅色，供模块加载时使用；_apply_theme() 会覆盖）
+STYLESHEET_DEFAULT = STYLESHEET % _LIGHT_COLORS
 
 
 class DiskMonitor(QMainWindow):
@@ -418,7 +464,7 @@ class DiskMonitor(QMainWindow):
             self.setWindowIcon(QtGui.QIcon(str(APP_ICON_PATH)))
         self.setMinimumSize(1100, 700)
         self.resize(1280, 800)
-        self.setStyleSheet(STYLESHEET)
+        self.setStyleSheet(STYLESHEET_DEFAULT)
         self.current_path = os.path.abspath(os.sep)
         self._full_path = self.current_path
         self._nav_history = []
@@ -435,6 +481,8 @@ class DiskMonitor(QMainWindow):
         self._app_settings = QtCore.QSettings("FileCare", "FileCare")
         self._search_timer = None
         self._build_ui()
+        # 启动时应用已保存的字体设置
+        self._apply_font_size()
         self._apply_language()
         self._update_home_disks()
         self._navigate_to(self.current_path, add_history=False)
@@ -442,6 +490,13 @@ class DiskMonitor(QMainWindow):
         # 首次建库提示与后台增量更新分开进行，避免阻塞主界面。
         QtCore.QTimer.singleShot(350, self._show_first_index_notice)
         QtCore.QTimer.singleShot(1000, self._auto_rebuild_index_on_startup)
+        
+        # 启动时自动扫描索引（如果设置开启）
+        if self._settings.get("general", "auto_scan_on_start", False):
+            QtCore.QTimer.singleShot(2000, self._auto_start_scan)
+        
+        # 设置自动扫描定时器
+        self._setup_auto_scan_timer()
 
     def _icon(self, enum):
         return self.style().standardIcon(enum)
@@ -453,9 +508,39 @@ class DiskMonitor(QMainWindow):
         self._i18n_widgets.setdefault(key, []).append(widget)
         return widget
 
-    def _change_language(self, index):
-        self.language = "en" if index == 1 else "zh"
-        self._apply_language()
+    def _apply_font_size(self):
+        """应用字体大小设置"""
+        size = self._settings.get("ui", "font_size", "medium")
+        
+        # 定义字体大小映射
+        size_map = {
+            "small": 12,
+            "medium": 14,
+            "large": 16,
+        }
+        
+        base_size = size_map.get(size, 14)
+        
+        # 创建字体大小样式
+        font_stylesheet = f"""
+            * {{ font-size: {base_size}px; }}
+            QLabel#title {{ font-size: {base_size + 1}px; }}
+            QLabel#sectionTitle {{ font-size: {base_size + 1}px; }}
+            QPushButton#navTab {{ font-size: {base_size}px; }}
+            QPushButton {{ font-size: {base_size - 1}px; }}
+        """
+        
+        # 应用字体样式（追加到现有样式表）
+        current_stylesheet = self.styleSheet()
+        # 移除旧的字体样式（如果存在）
+        if "/* FONT_SIZE_STYLE */" in current_stylesheet:
+            start = current_stylesheet.find("/* FONT_SIZE_STYLE */")
+            end = current_stylesheet.find("/* END_FONT_SIZE_STYLE */") + len("/* END_FONT_SIZE_STYLE */")
+            current_stylesheet = current_stylesheet[:start] + current_stylesheet[end:]
+        
+        # 添加新的字体样式
+        new_stylesheet = current_stylesheet + f"\n/* FONT_SIZE_STYLE */\n{font_stylesheet}\n/* END_FONT_SIZE_STYLE */"
+        self.setStyleSheet(new_stylesheet)
 
     def _apply_language(self):
         for key, widgets in self._i18n_widgets.items():
@@ -463,24 +548,18 @@ class DiskMonitor(QMainWindow):
                 widget.setText(self._tr(key))
         self.setWindowTitle(self._tr("app_name"))
         QtWidgets.QApplication.setApplicationDisplayName(self._tr("app_name"))
-        self.search_box.setPlaceholderText(self._tr("search"))
-        self._language_combo.setItemText(0, self._tr("language_zh"))
-        self._language_combo.setItemText(1, self._tr("language_en"))
-        self._language_combo.setToolTip(self._tr("language"))
-        # 扫描结果标签页
+        # 扫描结果标签页（index 0 大文件 / 1 大文件夹 / 2 清理建议 / 3 垃圾文件）
         self._scan_result_tabs.setTabText(0, self._tr("large_files"))
-        self._scan_result_tabs.setTabText(1, "📊 空间可视化" if self.language == "zh" else "📊 Space Map")
-        self._scan_result_tabs.setTabText(2, self._tr("large_folders"))
-        self._scan_result_tabs.setTabText(3, self._tr("cleanup_advice"))
-        self._scan_result_tabs.setTabText(4, self._tr("junk_files"))
+        self._scan_result_tabs.setTabText(1, self._tr("large_folders"))
+        self._scan_result_tabs.setTabText(2, self._tr("cleanup_advice"))
+        self._scan_result_tabs.setTabText(3, self._tr("junk_files"))
         # 回收站页面表头与工具栏
         self._rb_tree.setHeaderLabels([
             "", self._tr("rb_col_name"), self._tr("rb_col_origin"),
             self._tr("rb_col_size"), self._tr("rb_col_deleted"), self._tr("rb_col_actions"),
         ])
         if hasattr(self, "_rb_btn_deselect"):
-            self._rb_btn_deselect.setText(
-                (self._tr("rb_select_all") + " ✗") if self.language == "zh" else "Deselect All")
+            self._rb_btn_deselect.setText("全不选" if self.language == "zh" else "Deselect All")
         if hasattr(self, "_home_greeting_sub"):
             self._home_greeting_sub.setText(
                 self._tr("home_greeting_sub").replace("{time}", self._last_scan_time() or "—"))
@@ -531,7 +610,7 @@ class DiskMonitor(QMainWindow):
         title = self._register_text("app_name", QLabel()); title.setObjectName("title"); tb.addWidget(title)
         tb.addSpacing(16)
 
-        # 导航标签（首页 / 文件管理 / 大文件清理 / 空间可视化 / 快速搜索 / 回收站管理）
+        # 导航标签（首页 / 文件管理 / 大文件清理 / 空间可视化 / 快速搜索 / 回收站管理 / 设置）
         self._nav_tabs = []
         nav_defs = [
             ("nav_home", self._show_home_view),
@@ -540,6 +619,7 @@ class DiskMonitor(QMainWindow):
             ("nav_visualization", self._show_visualization_view),
             ("nav_search", self._show_search_view),
             ("nav_recycle", self._show_recycle_view),
+            ("nav_settings", self._show_settings_view),
         ]
         for key, slot in nav_defs:
             btn = QPushButton()
@@ -550,16 +630,6 @@ class DiskMonitor(QMainWindow):
             self._nav_tabs.append(btn)
             tb.addWidget(btn)
         tb.addStretch()
-
-        self.search_box = QtWidgets.QLineEdit()
-        self.search_box.setMinimumWidth(220)
-        self.search_box.setPlaceholderText(self._tr("search"))
-        self.search_box.textChanged.connect(self._on_search)
-        tb.addWidget(self.search_box)
-        tb.addSpacing(12)
-        self._language_label = self._register_text("language", QLabel())
-        self._language_combo = QComboBox(); self._language_combo.addItems(["中文", "English"]); self._language_combo.setFixedWidth(94); self._language_combo.currentIndexChanged.connect(self._change_language)
-        tb.addWidget(self._language_label); tb.addWidget(self._language_combo)
         root.addWidget(toolbar)
 
         # ── 侧边栏（属于"文件管理"页面） ──
@@ -583,13 +653,19 @@ class DiskMonitor(QMainWindow):
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu); self.tree.customContextMenuRequested.connect(self._on_context_menu)
         side.addWidget(self.tree, 1)
 
-        # ── 页面栈：0 首页 / 1 文件管理 / 2 大文件清理 / 3 空间可视化 / 4 快速搜索 / 5 回收站管理 ──
+        # ── 页面栈：0 首页 / 1 文件管理 / 2 大文件清理 / 3 空间可视化 / 4 快速搜索 / 5 回收站管理 / 6 设置 ──
         self._detail_page = self._build_detail_page()
         self._home_page = self._build_home_page()
         self._scan_page = self._build_scan_page()
         self._visualization_page = self._build_visualization_page()
         self._search_page = self._build_search_page()
         self._recycle_page = self._build_recycle_page()
+        
+        # 设置页面
+        self._settings = get_settings()
+        self._settings_page = SettingsPage(self._settings)
+        self._settings_page.settings_saved.connect(self._on_settings_saved)
+        self._settings_page.settings_closed.connect(self._show_home_view)
 
         browse_container = QWidget()
         browse_container.setObjectName("page")
@@ -607,6 +683,7 @@ class DiskMonitor(QMainWindow):
         self._main_stack.addWidget(self._visualization_page)  # index 3
         self._main_stack.addWidget(self._search_page)   # index 4
         self._main_stack.addWidget(self._recycle_page)  # index 5
+        self._main_stack.addWidget(self._settings_page) # index 6
         self._main_stack.setCurrentIndex(0)
         self._set_active_tab(0)
 
@@ -815,7 +892,7 @@ class DiskMonitor(QMainWindow):
         toolbar_row.addStretch()
         btn_select_all = QPushButton(); self._register_text("rb_select_all", btn_select_all)
         btn_select_all.clicked.connect(lambda: self._rb_set_all(True))
-        btn_deselect = QPushButton(self._tr("rb_select_all") + " ✗")
+        btn_deselect = QPushButton("全不选")
         btn_deselect.clicked.connect(lambda: self._rb_set_all(False))
         self._rb_btn_deselect = btn_deselect
         btn_del = QPushButton(); self._register_text("rb_delete_selected", btn_del)
@@ -2237,16 +2314,36 @@ class DiskMonitor(QMainWindow):
 
     def _delete_path(self, path):
         if not path: return False
-        if QMessageBox.question(self, "确认移至回收站", f"确定要移动以下项目吗？\n\n{path}", QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes: return False
+        # 读取设置：是否删除前确认
+        confirm_before_delete = self._settings.get("cleanup", "confirm_before_delete", True)
+        if confirm_before_delete:
+            if QMessageBox.question(self, "确认移至回收站", f"确定要移动以下项目吗？\n\n{path}", QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes: return False
         
-        # 先尝试普通方式
-        ok, message = self.file_operations.move_to_recycle_bin(path)
+        # 读取设置：是否使用系统回收站
+        use_system_recycle = self._settings.get("cleanup", "use_system_recycle", True)
         
-        # 权限不足时使用 Windows Shell API（会弹出 UAC 授权，无需重启）
-        if not ok and "没有权限" in message:
-            ok = self._windows_shell_delete(path, allow_undo=True)
-            if ok:
-                message = "已成功移至回收站"
+        if use_system_recycle:
+            # 先尝试普通方式
+            ok, message = self.file_operations.move_to_recycle_bin(path)
+            
+            # 权限不足时使用 Windows Shell API（会弹出 UAC 授权，无需重启）
+            if not ok and "没有权限" in message:
+                ok = self._windows_shell_delete(path, allow_undo=True)
+                if ok:
+                    message = "已成功移至回收站"
+        else:
+            # 直接永久删除
+            try:
+                if os.path.isdir(path) and not os.path.islink(path):
+                    shutil.rmtree(path)
+                else:
+                    os.remove(path)
+                ok, message = True, "已永久删除"
+            except PermissionError:
+                ok = self._windows_shell_delete(path, allow_undo=False)
+                message = "已永久删除" if ok else "删除失败"
+            except Exception as exc:
+                ok, message = False, str(exc)
         
         (QMessageBox.information if ok else QMessageBox.warning)(self, "操作结果", message)
         if ok: self.refresh_folder()
@@ -2433,6 +2530,17 @@ class DiskMonitor(QMainWindow):
         self._set_active_tab(5)
         self._rb_load_items()
 
+    def _show_settings_view(self):
+        """切换到设置视图"""
+        self._main_stack.setCurrentIndex(6)
+        self._set_active_tab(6)
+
+    def _on_settings_saved(self):
+        """设置保存后的回调"""
+        # 这里可以添加设置生效后的刷新逻辑
+        # 例如：更新界面主题、重新加载配置等
+        pass
+
     def _show_detail_view(self):
         """兼容旧调用：跳转到文件管理视图"""
         self._show_browse_view()
@@ -2451,11 +2559,56 @@ class DiskMonitor(QMainWindow):
 
     def _start_scan(self):
         if self._scanner_thread and self._scanner_thread.isRunning(): return
-        self._large_files.clear(); self._large_folders.clear(); self._suggestions.clear(); self._garbage_files.clear()
-        self._scanner_thread = DiskScannerThread(self._scan_path, self._threshold.value(), self._top_n.value())
+        # 读取设置：大文件阈值、大文件夹阈值、排除目录、排除文件类型
+        threshold_mb = self._settings.get("cleanup", "large_file_threshold_mb", 100)
+        folder_threshold_mb = self._settings.get("cleanup", "large_folder_threshold_mb", 1024)
+        exclude_dirs = self._settings.get("scan", "exclude_dirs", [])
+        exclude_patterns = self._settings.get("scan", "exclude_patterns", [])
+        self._scanner_thread = DiskScannerThread(self._scan_path, threshold_mb, folder_threshold_mb, self._top_n.value(), exclude_dirs, exclude_patterns)
         self._scanner_thread.progress_signal.connect(self._scan_progress_update); self._scanner_thread.status_signal.connect(self._scan_status_update)
         self._scanner_thread.finished_signal.connect(self._scan_finished); self._scanner_thread.error_signal.connect(lambda msg: QMessageBox.warning(self, "扫描错误", msg))
         self._scan_start.setEnabled(False); self._scan_cancel.setEnabled(True); self._scan_progress.setRange(0, 0); self._scan_status.setText((f"Scanning: {self._scan_path}" if self.language == "en" else f"正在扫描：{self._scan_path}")); self._scanner_thread.start()
+
+    def _auto_start_scan(self):
+        """启动时自动扫描索引"""
+        if self._scanner_thread and self._scanner_thread.isRunning():
+            return
+        # 自动扫描时使用默认路径和设置
+        threshold_mb = self._settings.get("cleanup", "large_file_threshold_mb", 100)
+        folder_threshold_mb = self._settings.get("cleanup", "large_folder_threshold_mb", 1024)
+        exclude_dirs = self._settings.get("scan", "exclude_dirs", [])
+        exclude_patterns = self._settings.get("scan", "exclude_patterns", [])
+        self._scanner_thread = DiskScannerThread(self.current_path, threshold_mb, folder_threshold_mb, self._top_n.value(), exclude_dirs, exclude_patterns)
+        self._scanner_thread.progress_signal.connect(self._scan_progress_update)
+        self._scanner_thread.status_signal.connect(self._scan_status_update)
+        self._scanner_thread.finished_signal.connect(self._scan_finished)
+        self._scanner_thread.error_signal.connect(lambda msg: QMessageBox.warning(self, "扫描错误", msg))
+        self._scan_status.setText(f"正在自动扫描：{self.current_path}")
+        self._scanner_thread.start()
+
+    def _setup_auto_scan_timer(self):
+        """设置自动扫描定时器"""
+        interval = self._settings.get("scan", "auto_scan_interval", "off")
+        
+        # 如果已有定时器，先停止
+        if hasattr(self, '_auto_scan_timer') and self._auto_scan_timer:
+            self._auto_scan_timer.stop()
+            self._auto_scan_timer = None
+        
+        # 根据设置创建定时器
+        if interval == "off":
+            return
+        
+        self._auto_scan_timer = QtCore.QTimer(self)
+        self._auto_scan_timer.timeout.connect(self._auto_start_scan)
+        
+        # 设置间隔时间（毫秒）
+        if interval == "daily":
+            self._auto_scan_timer.start(24 * 60 * 60 * 1000)  # 24小时
+        elif interval == "weekly":
+            self._auto_scan_timer.start(7 * 24 * 60 * 60 * 1000)  # 7天
+        elif interval == "monthly":
+            self._auto_scan_timer.start(30 * 24 * 60 * 60 * 1000)  # 30天
 
     def _cancel_scan(self):
         if self._scanner_thread and self._scanner_thread.isRunning(): self._scanner_thread.cancel(); self._scan_status.setText("Cancelling scan safely..." if self.language == "en" else "正在安全取消扫描..."); self._scan_cancel.setEnabled(False)

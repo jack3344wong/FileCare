@@ -12,8 +12,8 @@ from PyQt5.QtGui import (
 from PyQt5.QtWidgets import QWidget, QToolTip
 
 
-# 大小级别颜色 — 高对比度配色
-_SIZE_COLORS = [
+# 大小级别颜色 — 高对比度配色（默认方案）
+_SIZE_COLORS_DEFAULT = [
     # (min_bytes, fill_color, label)
     (10 * 1024 ** 3, QColor(180, 80, 120), "> 10 GB"),
     (1 * 1024 ** 3,  QColor(79, 172, 254), "1–10 GB"),
@@ -22,9 +22,46 @@ _SIZE_COLORS = [
     (0,               QColor(168, 237, 234), "< 10 MB"),
 ]
 
+# 蓝色系配色
+_SIZE_COLORS_BLUE = [
+    (10 * 1024 ** 3, QColor(41, 98, 255), "> 10 GB"),
+    (1 * 1024 ** 3,  QColor(64, 156, 255), "1–10 GB"),
+    (100 * 1024 ** 2, QColor(100, 181, 246), "100 MB–1 GB"),
+    (10 * 1024 ** 2, QColor(144, 202, 249), "10–100 MB"),
+    (0,               QColor(187, 222, 251), "< 10 MB"),
+]
 
-def _color_for_size(size_bytes: int) -> QColor:
-    for threshold, color, _ in _SIZE_COLORS:
+# 绿色系配色
+_SIZE_COLORS_GREEN = [
+    (10 * 1024 ** 3, QColor(46, 125, 50), "> 10 GB"),
+    (1 * 1024 ** 3,  QColor(76, 175, 80), "1–10 GB"),
+    (100 * 1024 ** 2, QColor(129, 199, 132), "100 MB–1 GB"),
+    (10 * 1024 ** 2, QColor(165, 214, 167), "10–100 MB"),
+    (0,               QColor(200, 230, 201), "< 10 MB"),
+]
+
+# 暖色系配色
+_SIZE_COLORS_WARM = [
+    (10 * 1024 ** 3, QColor(230, 81, 0), "> 10 GB"),
+    (1 * 1024 ** 3,  QColor(245, 124, 0), "1–10 GB"),
+    (100 * 1024 ** 2, QColor(255, 167, 38), "100 MB–1 GB"),
+    (10 * 1024 ** 2, QColor(255, 183, 77), "10–100 MB"),
+    (0,               QColor(255, 213, 79), "< 10 MB"),
+]
+
+# 配色方案映射
+_COLOR_SCHEMES = {
+    "default": _SIZE_COLORS_DEFAULT,
+    "blue": _SIZE_COLORS_BLUE,
+    "green": _SIZE_COLORS_GREEN,
+    "warm": _SIZE_COLORS_WARM,
+}
+
+
+def _color_for_size(size_bytes: int, scheme: str = "default") -> QColor:
+    """根据文件大小和配色方案返回颜色"""
+    colors = _COLOR_SCHEMES.get(scheme, _SIZE_COLORS_DEFAULT)
+    for threshold, color, _ in colors:
         if size_bytes >= threshold:
             return QColor(color)
     return QColor(200, 200, 200)
@@ -213,7 +250,13 @@ class TreemapWidget(QWidget):
         self._font = QFont("Microsoft YaHei", 10)
         self._small_font = QFont("Microsoft YaHei", 8)
         self._tiny_font = QFont("Microsoft YaHei", 7)
+        self._color_scheme = "default"  # 当前配色方案
         self.setMouseTracking(True)
+
+    def set_color_scheme(self, scheme: str):
+        """设置配色方案"""
+        self._color_scheme = scheme
+        self.update()  # 触发重绘
 
     def set_data(self, folder_tree: dict):
         """设置文件夹树数据并渲染"""
@@ -361,7 +404,7 @@ class TreemapWidget(QWidget):
             draw_rect = rect.adjusted(
                 tile_gap / 2, tile_gap / 2, -tile_gap / 2, -tile_gap / 2)
 
-            color = _color_for_size(node.get("size", 0))
+            color = _color_for_size(node.get("size", 0), self._color_scheme)
             is_hovered = (self._hovered_item and
                           self._hovered_item.get("node") is node)
             if is_hovered:
