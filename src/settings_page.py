@@ -170,6 +170,10 @@ class SettingsPage(QWidget):
         self._start_minimized_check.setToolTip("启动后不显示主窗口，直接在托盘运行")
         startup_layout.addWidget(self._start_minimized_check)
         
+        self._close_to_tray_check = QCheckBox("关闭窗口时最小化到系统托盘")
+        self._close_to_tray_check.setToolTip("点击关闭按钮后不退出程序，而是最小化到系统托盘；按住 Shift 点击可强制退出")
+        startup_layout.addWidget(self._close_to_tray_check)
+        
         self._auto_scan_check = QCheckBox("启动时自动扫描索引")
         self._auto_scan_check.setToolTip("启动后自动开始构建文件索引")
         startup_layout.addWidget(self._auto_scan_check)
@@ -459,6 +463,7 @@ class SettingsPage(QWidget):
         # 常规设置
         self._auto_start_check.setChecked(self._settings.get("general", "auto_start", False))
         self._start_minimized_check.setChecked(self._settings.get("general", "start_minimized", False))
+        self._close_to_tray_check.setChecked(self._settings.get("general", "close_to_tray", True))
         self._auto_scan_check.setChecked(self._settings.get("general", "auto_scan_on_start", False))
         
         # 扫描与索引设置
@@ -504,6 +509,7 @@ class SettingsPage(QWidget):
         auto_start = self._auto_start_check.isChecked()
         self._settings.set("general", "auto_start", auto_start)
         self._settings.set("general", "start_minimized", self._start_minimized_check.isChecked())
+        self._settings.set("general", "close_to_tray", self._close_to_tray_check.isChecked())
         self._settings.set("general", "auto_scan_on_start", self._auto_scan_check.isChecked())
         
         # 应用开机自启动设置

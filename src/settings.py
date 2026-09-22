@@ -14,6 +14,7 @@ DEFAULT_CONFIG = {
     "general": {
         "auto_start": False,              # 开机自启动
         "start_minimized": False,         # 启动时最小化到托盘
+        "close_to_tray": True,            # 关闭窗口时最小化到托盘（False=直接退出）
         "auto_scan_on_start": False,      # 启动时自动扫描索引
         "language": "zh",                 # 语言（预留）
     },

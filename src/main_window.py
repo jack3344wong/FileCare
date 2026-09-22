@@ -31,6 +31,7 @@ from content_extractor import ContentExtractor
 from treemap_widget import TreemapWidget
 from settings import get_settings
 from settings_page import SettingsPage
+from tray_manager import TrayManager
 
 
 APP_NAME_ZH = "文件管家"
@@ -497,6 +498,16 @@ class DiskMonitor(QMainWindow):
         
         # 设置自动扫描定时器
         self._setup_auto_scan_timer()
+        
+        # 初始化系统托盘
+        self._tray_manager = TrayManager(self)
+        self._tray_manager.setup(str(APP_ICON_PATH), APP_NAME_ZH)
+        self._tray_manager.show_window_requested.connect(self._tray_show_window)
+        self._tray_manager.hide_window_requested.connect(self.hide)
+        self._tray_manager.quit_requested.connect(self._tray_quit)
+        self._tray_manager.scan_requested.connect(self._tray_scan)
+        self._tray_manager.settings_requested.connect(self._show_settings_view)
+        self._tray_manager.show()
 
     def _icon(self, enum):
         return self.style().standardIcon(enum)
@@ -2879,17 +2890,85 @@ class DiskMonitor(QMainWindow):
         """兼容旧调用：切换到回收站管理页面"""
         self._show_recycle_view()
 
+    def _tray_show_window(self):
+        """从托盘恢复窗口"""
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def _tray_quit(self):
+        """从托盘退出程序"""
+        self._force_quit = True
+        self.close()
+
+    def _tray_scan(self, scan_type):
+        """从托盘菜单触发扫描"""
+        if scan_type == "all":
+            self._show_scan_view()
+            # 扫描全盘（C:\）
+            self._scan_path = os.path.abspath(os.sep)
+            self._start_scan()
+        elif scan_type == "user":
+            self._show_scan_view()
+            # 扫描用户目录
+            self._scan_path = str(Path.home())
+            self._start_scan()
+
     def closeEvent(self, event):
-        if self._scanner_thread and self._scanner_thread.isRunning():
-            self._scanner_thread.cancel()
-            self._scanner_thread.wait()
-        if (hasattr(self, '_viz_scanner_thread') and self._viz_scanner_thread and
-                self._viz_scanner_thread.isRunning()):
-            self._viz_scanner_thread.cancel()
-            self._viz_scanner_thread.wait()
-        self.quick_search_engine.close()
-        self.fulltext_search_engine.close()
-        super().closeEvent(event)
+        """重写关闭事件：支持最小化到托盘"""
+        # 检查是否是强制退出（从托盘菜单或 Shift+关闭）
+        force_quit = getattr(self, '_force_quit', False)
+        shift_pressed = QtWidgets.QApplication.keyboardModifiers() & Qt.ShiftModifier
+        
+        if force_quit or shift_pressed:
+            # 强制退出：清理资源并关闭
+            if self._scanner_thread and self._scanner_thread.isRunning():
+                self._scanner_thread.cancel()
+                self._scanner_thread.wait()
+            if (hasattr(self, '_viz_scanner_thread') and self._viz_scanner_thread and
+                    self._viz_scanner_thread.isRunning()):
+                self._viz_scanner_thread.cancel()
+                self._viz_scanner_thread.wait()
+            self.quick_search_engine.close()
+            self.fulltext_search_engine.close()
+            
+            # 清理托盘图标
+            if hasattr(self, '_tray_manager') and self._tray_manager:
+                self._tray_manager.cleanup()
+            
+            # 退出应用
+            QtWidgets.QApplication.quit()
+            event.accept()
+        else:
+            # 检查设置：是否关闭到托盘
+            close_to_tray = self._settings.get("general", "close_to_tray", True)
+            
+            if close_to_tray and hasattr(self, '_tray_manager') and self._tray_manager:
+                # 最小化到托盘
+                self.hide()
+                self._tray_manager.show_message(
+                    "文件管家",
+                    "程序已在后台运行，点击托盘图标可恢复窗口",
+                    QtWidgets.QSystemTrayIcon.Information,
+                    3000
+                )
+                event.ignore()  # 忽略关闭事件，保持程序运行
+            else:
+                # 直接退出
+                if self._scanner_thread and self._scanner_thread.isRunning():
+                    self._scanner_thread.cancel()
+                    self._scanner_thread.wait()
+                if (hasattr(self, '_viz_scanner_thread') and self._viz_scanner_thread and
+                        self._viz_scanner_thread.isRunning()):
+                    self._viz_scanner_thread.cancel()
+                    self._viz_scanner_thread.wait()
+                self.quick_search_engine.close()
+                self.fulltext_search_engine.close()
+                
+                if hasattr(self, '_tray_manager') and self._tray_manager:
+                    self._tray_manager.cleanup()
+                
+                event.accept()
 
 
 # 保留新旧入口名称兼容性。
