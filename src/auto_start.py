@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""开机自启动管理模块"""
+"""开机自启动管理模块
+
+通过 Windows 注册表 HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run 实现。
+使用当前用户权限（HKCU），不需要管理员权限，不弹 UAC。
+"""
 import sys
 import winreg
 from pathlib import Path
@@ -10,14 +14,14 @@ APP_NAME = "FileCare"
 
 
 def get_executable_path():
-    """获取当前可执行文件路径"""
+    """获取当前可执行文件路径（含 --minimized 参数）"""
     if getattr(sys, 'frozen', False):
         # PyInstaller 打包后的 exe
-        return sys.executable
+        return f'"{sys.executable}" --minimized'
     else:
         # 开发环境，使用 Python 运行 main.py
         main_path = Path(__file__).parent / "main.py"
-        return f'"{sys.executable}" "{main_path}"'
+        return f'"{sys.executable}" "{main_path}" --minimized'
 
 
 def is_auto_start_enabled():
@@ -67,3 +71,8 @@ def set_auto_start(enabled):
         return enable_auto_start()
     else:
         return disable_auto_start()
+
+
+def cleanup_auto_start():
+    """清理注册表项（卸载时调用）"""
+    return disable_auto_start()

@@ -175,10 +175,13 @@ def main():
         window = DiskMonitor()
         window.setObjectName("DiskMonitorMainWindow")
         
+        # 检查命令行参数 --minimized（开机自启动时使用）
+        minimized_mode = "--minimized" in sys.argv
+        
         # 读取启动时最小化设置
         from settings import get_settings
         settings = get_settings()
-        if settings.get("general", "start_minimized", False):
+        if minimized_mode or settings.get("general", "start_minimized", False):
             window.hide()  # 启动时隐藏窗口
         else:
             window.show()

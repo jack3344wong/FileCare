@@ -370,6 +370,9 @@ begin
   // 在卸载完成后（usPostUninstall 阶段）删除用户数据
   if CurUninstallStep = usPostUninstall then
   begin
+    // 清理开机自启动注册表项
+    RegDeleteValue(HKEY_CURRENT_USER, 'Software\Microsoft\Windows\CurrentVersion\Run', 'FileCare');
+    
     if DeleteUserData then
     begin
       UserDataDir := ExpandConstant('{%USERPROFILE}\.diskwise');
