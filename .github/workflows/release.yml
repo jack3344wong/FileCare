@@ -29,8 +29,16 @@ jobs:
         run: |
           # 运行器预装的是 Inno Setup 6，而本项目的安装脚本用到了 Inno 7
           # 才有的 NativeInt 类型，用 6 编译会直接报错，所以必须装 7。
-          $setup = Join-Path $env:RUNNER_TEMP "innosetup7.exe"
-          Invoke-WebRequest -Uri "https://jrsoftware.org/download.php/is.exe" -OutFile $setup
+          #
+          # 注意：jrsoftware.org/download.php/is.exe 现在只会 302 到下载选择页
+          # （isdl.php），拿到的是一张 HTML 而不是安装程序，直接用会失败。
+          # 这里改用官方 GitHub 仓库的版本直链，版本固定在 7.1.0。
+          $version = "7.1.0"
+          $url = "https://github.com/jrsoftware/issrc/releases/download/" +
+                 "is-7_1_0/innosetup-$version-x64.exe"
+          $setup = Join-Path $env:RUNNER_TEMP "innosetup-$version-x64.exe"
+          Write-Host "下载 Inno Setup $version : $url"
+          Invoke-WebRequest -Uri $url -OutFile $setup
           Start-Process -FilePath $setup `
             -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-" -Wait
 
