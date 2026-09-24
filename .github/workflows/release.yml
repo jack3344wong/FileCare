@@ -102,8 +102,13 @@ jobs:
 
           $exe = Get-ChildItem installer-output/FileCare-Setup-*.exe |
             Select-Object -First 1
+
+          # 带后缀的标签（如 v1.3.0-rc1）必须显式标记为预发布，否则
+          # /releases/latest 会把它当成正式版，所有用户都会被提示升级到试发布包。
+          $channel = if ($tag -match "-") { "--prerelease" } else { "--latest" }
           gh release create $tag `
             $exe.FullName `
             "$($exe.FullName).sha256" `
             --title "文件管家 $tag" `
-            --notes-file body.md
+            --notes-file body.md `
+            $channel

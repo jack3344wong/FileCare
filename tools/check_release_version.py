@@ -66,10 +66,16 @@ def main():
     if tag:
         if not tag.lower().startswith("v"):
             problems.append("发布标签应以 v 开头（例如 v{0}），当前为 {1}".format(app, tag))
-        if tag_version != app:
+        # 预发布标签（v1.3.0-rc1 等）按同一版本的试发布处理：剥离 -rc1 之类的后缀
+        # 之后再比对，否则标签类型的试发布会被这里直接拦下，发布流程根本跑不起来。
+        base_version = re.split(r"[-+]", tag_version)[0]
+        if base_version != app:
             problems.append(
                 "标签 {0} 与 APP_VERSION({1}) 不一致："
                 "应用内检查更新会误判版本".format(tag, app))
+        elif base_version != tag_version:
+            print("提示：{0} 是 {1} 的预发布标签，按同版本比对（发布时会标记为"
+                  "预发布，不会进入 /releases/latest）".format(tag, app))
 
     if problems:
         print()
