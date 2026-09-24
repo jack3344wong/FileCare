@@ -14,6 +14,14 @@ import pathlib
 import re
 import sys
 
+# 同 check_release_version：Windows 管道下默认代码页无法编码中文，
+# 发布说明整段是中文，不解码成 UTF-8 会在 CI 里直接失败。
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except (AttributeError, ValueError):
+    pass
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CHANGES = ROOT / "CHANGES.md"
 

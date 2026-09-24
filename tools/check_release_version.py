@@ -20,6 +20,14 @@ import pathlib
 import re
 import sys
 
+# Windows 上 stdout 被管道接管时默认用本地代码页（cp1252），打印中文会抛
+# UnicodeEncodeError 直接让 CI 步骤失败，这里显式切成 UTF-8 输出。
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except (AttributeError, ValueError):      # Python < 3.7 或不支持重配置的环境
+    pass
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 

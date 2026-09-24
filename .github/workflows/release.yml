@@ -20,6 +20,12 @@ permissions:
 jobs:
   build-and-release:
     runs-on: windows-latest
+    # Windows 上的 Python 在 stdout 被管道接管时默认用本地代码页（cp1252），
+    # 打印中文会直接抛 UnicodeEncodeError 让步骤失败（版本校验、发布说明都
+    # 要打印中文）。这里统一强制 UTF-8。
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
 
     steps:
       - uses: actions/checkout@v4
@@ -67,7 +73,6 @@ jobs:
         shell: pwsh
         run: |
           $env:QT_QPA_PLATFORM = "offscreen"
-          $env:PYTHONUTF8 = "1"
           $env:USERPROFILE = Join-Path $env:GITHUB_WORKSPACE ".test-profile"
           New-Item -ItemType Directory -Force $env:USERPROFILE | Out-Null
           python test_win7_compatibility.py
