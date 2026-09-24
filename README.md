@@ -4,7 +4,7 @@
 
 **Disk Space Analysis, File Management & Local Search Tool for Windows**
 
-[![Version](https://img.shields.io/badge/version-1.2.0-4a90e2.svg)](CHANGES.md)
+[![Version](https://img.shields.io/badge/version-1.3.0-4a90e2.svg)](CHANGES.md)
 [![Python](https://img.shields.io/badge/release%20runtime-Python%203.8-blue.svg)](requirements-win7.txt)
 [![Platform](https://img.shields.io/badge/Windows-7%20SP1%20x64%2B-lightgrey.svg)](packaging/README.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -23,16 +23,19 @@ FileCare is a local Windows file management tool designed for users who want to 
 - **Quick Search**: Fully indexed disk directory entries with wildcard, format, and path filtering
 - **Search Result Actions**: Open with default app, choose app, copy, cut, or open containing folder
 - **Content Search**: Local full-text search across PDF, Word, Excel, PowerPoint, RTF, and common text files
-- **Recycle Bin Management**: View, restore, or permanently delete items from the software recycle bin
+- **Recycle Bin Management**: View, restore, or permanently delete items from the system recycle bin
+- **System Tray & Auto-Start**: Minimizes to the system tray; optional start on Windows login
+- **In-App Updates**: One-click check for updates from GitHub, with automatic download, integrity verification, and silent upgrade
 
 ## Installation for End Users
 
-Download `FileCare-Setup-1.2.0.exe` from [GitHub Releases](https://github.com/jack3344wong/FileCare/releases), double-click to launch the installer, and follow the wizard. No Python or other runtime is required.
+Download `FileCare-Setup-1.3.0.exe` from [GitHub Releases](https://github.com/jack3344wong/FileCare/releases), double-click to launch the installer, and follow the wizard. No Python or other runtime is required.
 
 The installer offers the following options:
 
 - Create a desktop shortcut
 - Create a Start Menu folder with launch and uninstall entries
+- Start FileCare automatically when Windows starts (optional)
 
 During installation, a borderless animated card demonstrates the scanning effect, and an initial filename index is built within approximately 20 seconds under the current logged-in user. The application continues completing the remaining index in the background after first launch.
 
@@ -63,9 +66,15 @@ python test_win7_compatibility.py
 python test_quick_search_completeness.py
 python test_fulltext_search.py
 python test_ui_smoke.py
+python test_rb_actions.py
+python test_rb_tristate.py
+python test_rb_delete_fix.py
+python test_update_core.py
+python test_update_ui.py
+python -m src.test_phase3
 ```
 
-Tests do not delete real user files; UI smoke tests use isolated temporary recycle bins and test user directories.
+Tests do not delete real user files; recycle bin tests create and clean up isolated temporary files.
 
 ## Building the Installer
 
@@ -107,7 +116,7 @@ Installed copies find the update via **设置 → 高级设置 → 立即检查�
 src/                    Application source code
 assets/                 Icons and installation animation resources
 packaging/              PyInstaller and Inno Setup configuration
-tools/                  Helper tools for reproducible resource generation
+tools/                  Helper tools for release validation and reproducible resource generation
 test_*.py               Functional and compatibility regression tests
 requirements.txt        Development dependencies
 requirements-win7.txt   Win7 release pinned dependencies

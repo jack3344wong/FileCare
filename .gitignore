@@ -71,3 +71,9 @@ PROMPT_FOR_NEW_CHAT.txt
 GITHUB_RELEASE_GUIDE.md
 FileCare_Project_Brief.docx
 docs/archive/
+agent_prompt/
+audit/
+audit_rectification/
+project_report/
+ui_update_preview/
+checkbox_states.png
