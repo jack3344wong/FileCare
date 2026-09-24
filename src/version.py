@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from typing import Tuple
 
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.3.1"
 APP_NAME_ZH = "文件管家"
 APP_NAME_EN = "FileCare"
 

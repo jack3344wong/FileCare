@@ -1,6 +1,6 @@
 #define MyAppNameZh "文件管家"
 #define MyAppNameEn "FileCare"
-#define MyAppVersion "1.3.0"
+#define MyAppVersion "1.3.1"
 #define MyAppExeName "FileCare.exe"
 
 [Setup]
@@ -26,7 +26,7 @@ VersionInfoVersion={#MyAppVersion}.0
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
 ; 应用内「检查更新」会以 /SILENT 启动本安装程序，此时必须自动关闭正在运行的
 ; 文件管家，否则程序文件被占用会导致复制失败。RestartApplications 关掉，
 ; 重启改由 [Run] 段按 /UPDATE 参数执行，避免出现两个实例。

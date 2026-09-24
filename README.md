@@ -4,7 +4,7 @@
 
 **Disk Space Analysis, File Management & Local Search Tool for Windows**
 
-[![Version](https://img.shields.io/badge/version-1.3.0-4a90e2.svg)](CHANGES.md)
+[![Version](https://img.shields.io/badge/version-1.3.1-4a90e2.svg)](CHANGES.md)
 [![Python](https://img.shields.io/badge/release%20runtime-Python%203.8-blue.svg)](requirements-win7.txt)
 [![Platform](https://img.shields.io/badge/Windows-7%20SP1%20x64%2B-lightgrey.svg)](packaging/README.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -29,7 +29,7 @@ FileCare is a local Windows file management tool designed for users who want to 
 
 ## Installation for End Users
 
-Download `FileCare-Setup-1.3.0.exe` from [GitHub Releases](https://github.com/jack3344wong/FileCare/releases), double-click to launch the installer, and follow the wizard. No Python or other runtime is required.
+Download `FileCare-Setup-1.3.1.exe` from [GitHub Releases](https://github.com/jack3344wong/FileCare/releases), double-click to launch the installer, and follow the wizard. No Python or other runtime is required.
 
 The installer offers the following options:
 
