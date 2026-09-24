@@ -2,8 +2,8 @@
 """配置管理模块 - 读写 JSON 配置文件"""
 from __future__ import annotations
 
+import copy
 import json
-import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -41,7 +41,8 @@ DEFAULT_CONFIG = {
     # 高级设置
     "advanced": {
         "check_update": "auto",           # 检查更新：auto/manual/off
-        "update_server": "https://filecare.cn/api/version/latest",  # 更新服务器
+        # 更新源固定为 GitHub 官方发布页（见 src/version.py 的 GITHUB_* 常量），
+        # 不再提供可配置的更新服务器地址。
         "log_level": "info",              # 日志级别：error/warning/info/debug
     },
     # 窗口状态（内部使用）
@@ -80,24 +81,48 @@ class Settings:
                     loaded = json.load(f)
                     # 合并默认配置（保留新增的默认项）
                     self._config = self._merge_with_defaults(loaded)
-            except (json.JSONDecodeError, IOError) as e:
+            except (json.JSONDecodeError, IOError, TypeError, ValueError) as e:
                 print(f"加载配置文件失败: {e}，使用默认配置")
-                self._config = DEFAULT_CONFIG.copy()
+                self._config = copy.deepcopy(DEFAULT_CONFIG)
         else:
             # 首次运行，使用默认配置
-            self._config = DEFAULT_CONFIG.copy()
+            self._config = copy.deepcopy(DEFAULT_CONFIG)
             self._save()
     
     def _merge_with_defaults(self, loaded: Dict) -> Dict:
         """将加载的配置与默认配置合并，保留新增的默认项"""
-        result = DEFAULT_CONFIG.copy()
+        if not isinstance(loaded, dict):
+            raise ValueError("配置文件根节点必须是 JSON 对象")
+        result = copy.deepcopy(DEFAULT_CONFIG)
         for section, values in loaded.items():
             if section in result and isinstance(result[section], dict):
+                if not isinstance(values, dict):
+                    raise ValueError(f"配置节 {section!r} 必须是 JSON 对象")
+                for key, value in values.items():
+                    if key in result[section]:
+                        default = result[section][key]
+                        if not self._is_compatible_value(default, value):
+                            raise ValueError(
+                                f"配置项 {section}.{key} 类型不正确")
                 # 合并子项
                 result[section] = {**result[section], **values}
             else:
                 result[section] = values
         return result
+
+    @staticmethod
+    def _is_compatible_value(default: Any, value: Any) -> bool:
+        """检查导入值是否与默认配置的基本类型兼容。"""
+        if default is None:
+            return True
+        if isinstance(default, bool):
+            return isinstance(value, bool)
+        if isinstance(default, int):
+            return isinstance(value, int) and not isinstance(value, bool)
+        if isinstance(default, list):
+            return (isinstance(value, list) and
+                    all(isinstance(item, str) for item in value))
+        return isinstance(value, type(default))
     
     def _save(self):
         """保存配置到文件"""
@@ -142,7 +167,7 @@ class Settings:
         Returns:
             该节的所有配置项
         """
-        return self._config.get(section, {}).copy()
+        return copy.deepcopy(self._config.get(section, {}))
     
     def set_section(self, section: str, values: Dict[str, Any]):
         """设置整个配置节
@@ -151,7 +176,7 @@ class Settings:
             section: 配置节名称
             values: 配置项字典
         """
-        self._config[section] = values
+        self._config[section] = copy.deepcopy(values)
     
     def save(self):
         """保存配置到文件"""
@@ -159,7 +184,7 @@ class Settings:
     
     def reset_to_default(self):
         """恢复默认配置"""
-        self._config = DEFAULT_CONFIG.copy()
+        self._config = copy.deepcopy(DEFAULT_CONFIG)
         self._save()
     
     def get_config_path(self) -> Path:
@@ -198,7 +223,7 @@ class Settings:
                 self._config = self._merge_with_defaults(imported)
                 self._save()
                 return True
-        except (json.JSONDecodeError, IOError) as e:
+        except (json.JSONDecodeError, IOError, TypeError, ValueError) as e:
             print(f"导入配置失败: {e}")
             return False
 

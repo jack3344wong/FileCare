@@ -15,6 +15,8 @@ from PyQt5.QtWidgets import (
 )
 
 from settings import Settings
+from update_dialog import check_and_prompt
+from version import APP_VERSION
 
 
 class SettingsPage(QWidget):
@@ -27,6 +29,7 @@ class SettingsPage(QWidget):
     def __init__(self, settings: Settings, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self._settings = settings
+        self._hint_labels = []  # 统一管理需要浅色样式的提示标签
         self._init_ui()
         self._load_settings()
     
@@ -249,8 +252,6 @@ class SettingsPage(QWidget):
         
         hint_label = QLabel("使用通配符格式，如 *.tmp, *.log")
         hint_label.setStyleSheet("color: #999; font-size: 12px;")
-        if not hasattr(self, "_hint_labels"):
-            self._hint_labels = []
         self._hint_labels.append(hint_label)
         exclude_pattern_layout.addWidget(hint_label)
         
@@ -316,19 +317,34 @@ class SettingsPage(QWidget):
         
         # 更新设置
         update_group = QGroupBox("软件更新")
+        self._update_group = update_group
         update_layout = QGridLayout(update_group)
-        
-        update_layout.addWidget(QLabel("检查更新："), 0, 0)
+
+        update_layout.addWidget(QLabel("当前版本："), 0, 0)
+        self._current_version_label = QLabel("v{0}".format(APP_VERSION))
+        self._current_version_label.setStyleSheet("color:#2c3e50; font-weight:600;")
+        update_layout.addWidget(self._current_version_label, 0, 1, 1, 2)
+
+        update_layout.addWidget(QLabel("检查更新："), 1, 0)
         self._check_update_combo = QComboBox()
         self._check_update_combo.addItem("自动检查", "auto")
         self._check_update_combo.addItem("手动检查", "manual")
         self._check_update_combo.addItem("关闭", "off")
-        update_layout.addWidget(self._check_update_combo, 0, 1)
-        
-        update_layout.addWidget(QLabel("更新服务器："), 1, 0)
-        self._update_server_edit = QLineEdit()
-        self._update_server_edit.setPlaceholderText("https://filecare.cn/api/version/latest")
-        update_layout.addWidget(self._update_server_edit, 1, 1)
+        self._check_update_combo.setToolTip(
+            "自动检查：每次启动时在后台查询一次；未发现新版本时不会打扰您")
+        update_layout.addWidget(self._check_update_combo, 1, 1, 1, 2)
+
+        self._check_now_btn = QPushButton("立即检查更新")
+        self._check_now_btn.setObjectName("primary")
+        self._check_now_btn.setToolTip("立即从 GitHub 查询最新版本，可直接下载并安装")
+        self._check_now_btn.clicked.connect(self._on_check_update_now)
+        update_layout.addWidget(self._check_now_btn, 2, 0, 1, 2)
+
+        self._update_hint_label = QLabel(
+            "更新包来自 GitHub 官方发布页，下载完成后会自动校验文件完整性。")
+        self._update_hint_label.setStyleSheet("color:#8e99a4; font-size:12px;")
+        self._update_hint_label.setWordWrap(True)
+        update_layout.addWidget(self._update_hint_label, 3, 0, 1, 3)
         
         layout.addWidget(update_group)
         
@@ -369,8 +385,6 @@ class SettingsPage(QWidget):
         path_layout.addWidget(QLabel("配置文件位置："))
         path_label = QLabel(str(self._settings.get_config_path()))
         path_label.setStyleSheet("color: #666; font-size: 12px;")
-        if not hasattr(self, "_hint_labels"):
-            self._hint_labels = []
         self._hint_labels.append(path_label)
         path_label.setWordWrap(True)
         path_layout.addWidget(path_label, 1)
@@ -461,7 +475,8 @@ class SettingsPage(QWidget):
     def _load_settings(self):
         """从配置加载到界面"""
         # 常规设置
-        self._auto_start_check.setChecked(self._settings.get("general", "auto_start", False))
+        from auto_start import is_auto_start_enabled
+        self._auto_start_check.setChecked(is_auto_start_enabled())
         self._start_minimized_check.setChecked(self._settings.get("general", "start_minimized", False))
         self._close_to_tray_check.setChecked(self._settings.get("general", "close_to_tray", True))
         self._auto_scan_check.setChecked(self._settings.get("general", "auto_scan_on_start", False))
@@ -496,8 +511,6 @@ class SettingsPage(QWidget):
         if update_index >= 0:
             self._check_update_combo.setCurrentIndex(update_index)
         
-        self._update_server_edit.setText(self._settings.get("advanced", "update_server", ""))
-        
         log_level = self._settings.get("advanced", "log_level", "info")
         log_index = self._log_level_combo.findData(log_level)
         if log_index >= 0:
@@ -505,16 +518,20 @@ class SettingsPage(QWidget):
     
     def _on_save(self):
         """保存按钮"""
-        # 常规设置
+        # 先执行可能失败的系统操作，避免配置与注册表状态不一致。
         auto_start = self._auto_start_check.isChecked()
+        from auto_start import is_auto_start_enabled, set_auto_start
+        if auto_start != is_auto_start_enabled():
+            ok, message = set_auto_start(auto_start)
+            if not ok:
+                QMessageBox.warning(self, "开机自启动设置失败", message)
+                return
+
+        # 常规设置
         self._settings.set("general", "auto_start", auto_start)
         self._settings.set("general", "start_minimized", self._start_minimized_check.isChecked())
         self._settings.set("general", "close_to_tray", self._close_to_tray_check.isChecked())
         self._settings.set("general", "auto_scan_on_start", self._auto_scan_check.isChecked())
-        
-        # 应用开机自启动设置
-        from auto_start import set_auto_start
-        set_auto_start(auto_start)
         
         # 扫描与索引设置
         self._settings.set("scan", "index_db_path", self._index_path_edit.text())
@@ -539,13 +556,25 @@ class SettingsPage(QWidget):
         
         # 高级设置
         self._settings.set("advanced", "check_update", self._check_update_combo.currentData())
-        self._settings.set("advanced", "update_server", self._update_server_edit.text())
         self._settings.set("advanced", "log_level", self._log_level_combo.currentData())
         
         self._settings.save()
         self.settings_saved.emit()
         QMessageBox.information(self, "成功", "设置已保存")
     
+    def _on_check_update_now(self):
+        """点击「立即检查更新」：从 GitHub 查询最新版本，有新版本时引导下载安装。
+
+        这里不检查「检查更新」下拉框的设置——用户主动点按钮就代表要检查，
+        下拉框只决定"每次启动是否自动检查"。
+        """
+        check_and_prompt(
+            self,
+            notify_when_latest=True,
+            show_errors=True,
+            busy_widgets=(self._check_now_btn,),
+        )
+
     def _browse_index_path(self):
         """浏览选择索引路径"""
         dir_path = QFileDialog.getExistingDirectory(self, "选择索引存储目录")
@@ -605,4 +634,6 @@ class SettingsPage(QWidget):
     
     def _on_cancel(self):
         """取消按钮"""
+        # 丢弃尚未保存的界面修改。
+        self._load_settings()
         self.settings_closed.emit()

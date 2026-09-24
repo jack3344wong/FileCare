@@ -4,7 +4,7 @@
 
 **Disk Space Analysis, File Management & Local Search Tool for Windows**
 
-[![Version](https://img.shields.io/badge/version-1.1.0-4a90e2.svg)](CHANGES.md)
+[![Version](https://img.shields.io/badge/version-1.2.0-4a90e2.svg)](CHANGES.md)
 [![Python](https://img.shields.io/badge/release%20runtime-Python%203.8-blue.svg)](requirements-win7.txt)
 [![Platform](https://img.shields.io/badge/Windows-7%20SP1%20x64%2B-lightgrey.svg)](packaging/README.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -27,7 +27,7 @@ FileCare is a local Windows file management tool designed for users who want to 
 
 ## Installation for End Users
 
-Download `FileCare-Setup-1.1.0.exe` from [GitHub Releases](https://github.com/jack3344wong/FileCare/releases), double-click to launch the installer, and follow the wizard. No Python or other runtime is required.
+Download `FileCare-Setup-1.2.0.exe` from [GitHub Releases](https://github.com/jack3344wong/FileCare/releases), double-click to launch the installer, and follow the wizard. No Python or other runtime is required.
 
 The installer offers the following options:
 
@@ -69,12 +69,37 @@ Tests do not delete real user files; UI smoke tests use isolated temporary recyc
 
 ## Building the Installer
 
+> **Inno Setup 7 is required.** Inno Setup 6 cannot compile this script: it uses
+> the `NativeInt` type, which only exists in Inno Setup 7.
+
 ```powershell
 python -m PyInstaller --clean --noconfirm packaging\FileCare.spec
-& "C:\Program Files\Inno Setup 7\ISCC.exe" packaging\FileCare.iss
+& "$env:LOCALAPPDATA\Programs\Inno Setup 7\ISCC.exe" packaging\FileCare.iss
 ```
 
-The generated single-file installer is located at `installer-output\FileCare-Setup-1.1.0.exe`. For the complete Win7 release environment and acceptance criteria, see [packaging/README.md](packaging/README.md).
+The generated installer is located at `installer-output\FileCare-Setup-<version>.exe`.
+For the complete Win7 release environment and acceptance criteria, see [packaging/README.md](packaging/README.md).
+
+## Releasing
+
+Pushing a `vX.Y.Z` tag builds the portable bundle and the installer, then publishes
+both to GitHub Releases (see `.github/workflows/release.yml`).
+
+Two things are load-bearing for the in-app updater, and the workflow verifies/fails on both:
+
+- The tag must match `APP_VERSION` in `src/version.py` (and `MyAppVersion` in
+  `packaging/FileCare.iss`). Run `python tools/check_release_version.py` before tagging.
+- The installer asset must be named `FileCare-Setup-<version>.exe` — that exact
+  pattern is what the updater looks for on the release.
+
+```powershell
+python tools/check_release_version.py
+git tag v1.3.0
+git push origin v1.3.0
+```
+
+Release notes are taken from `CHANGES.md`, so keep a `## vX.Y.Z` section for each release.
+Installed copies find the update via **设置 → 高级设置 → 立即检查更新** (or the tray menu).
 
 ## Project Structure
 

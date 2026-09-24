@@ -55,4 +55,4 @@ with tempfile.TemporaryDirectory(prefix="e2e_", dir=".") as tmp:
     oob = [r["node"]["name"] for r in res
            if r["rect"].right() > 1200.5 or r["rect"].bottom() > 600.5]
     assert not oob, f"越界: {oob}"
-    print("✅ 端到端验证通过：文件叶子已显示 + 布局无丢块无越界")
+    print("OK 端到端验证通过：文件叶子已显示 + 布局无丢块无越界")

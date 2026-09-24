@@ -44,10 +44,12 @@ datas = [
 binaries = []
 hiddenimports = [
     "main_window", "file_association", "file_operations",
-    "web_search", "recycle_bin_ui", "disk_scanner",
+    "web_search", "recycle_bin", "recycle_bin_ui", "disk_scanner",
     "quick_search", "fulltext_search", "content_extractor",
     "ui_event_handlers", "file_classifier", "duplicate_detector",
     "large_file_analyzer", "smart_cleaner", "cleanup",
+    # 应用内「检查更新」相关模块
+    "version", "updater", "update_dialog",
     "PyQt5.QtCore", "PyQt5.QtGui", "PyQt5.QtWidgets",
     "PyQt5.sip",
     "psutil",

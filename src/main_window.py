@@ -2,12 +2,14 @@
 """文件管家 / FileCare 完整主窗口。"""
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -21,6 +23,7 @@ from PyQt5.QtWidgets import (
     QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
+from recycle_bin import WindowsRecycleBin
 from disk_scanner import DiskScannerThread
 from file_association import FileAssociation
 from file_operations import FileOperations
@@ -32,6 +35,7 @@ from treemap_widget import TreemapWidget
 from settings import get_settings
 from settings_page import SettingsPage
 from tray_manager import TrayManager
+from update_dialog import check_and_prompt
 
 
 APP_NAME_ZH = "文件管家"
@@ -307,6 +311,14 @@ QPushButton#dangerSolid { background:%(red)s; color:white; border:1px solid %(re
 QPushButton#dangerSolid:hover { background:%(redhover)s; }
 QPushButton#success { color:%(accent)s; border-color:%(hoverborder)s; background:%(card)s; }
 QPushButton#success:hover { background:%(hoverbg)s; }
+QPushButton#rbRestoreAction, QPushButton#rbDeleteAction {
+    min-height:0; max-height:30px; padding:3px 10px; border-radius:7px; font-size:12px;
+    background:%(card)s;
+}
+QPushButton#rbRestoreAction { color:%(accent)s; border-color:%(hoverborder)s; }
+QPushButton#rbRestoreAction:hover { background:%(hoverbg)s; border-color:%(accent)s; }
+QPushButton#rbDeleteAction { color:%(red)s; border-color:%(dangerborder)s; }
+QPushButton#rbDeleteAction:hover { background:%(dangerhover)s; border-color:%(red)s; }
 QPushButton#action, QPushButton#deleteAction { min-height:40px; padding:9px 14px; text-align:left; }
 QPushButton#deleteAction { color:%(red)s; border-color:%(dangerborder)s; }
 QPushButton#deleteAction:hover { background:%(dangerhover)s; border-color:%(red)s; color:%(red)s; }
@@ -372,6 +384,7 @@ QTreeWidget {
     alternate-background-color:%(altrow)s; font-size:13px;
 }
 QTreeWidget::item { min-height:30px; padding:4px 6px; border-bottom:1px solid %(bg)s; }
+QTreeWidget#recycleTree::item { min-height:40px; }
 QTreeWidget::item:hover { background:%(cardoft)s; }
 QTreeWidget::item:selected { background:%(hoverbg)s; color:%(text)s; }
 QHeaderView::section {
@@ -423,15 +436,52 @@ QPlainTextEdit, QTextEdit {
 
 /* ── 复选框 ── */
 QCheckBox { spacing:8px; font-size:13px; color:%(text)s; }
-QCheckBox::indicator { width:17px; height:17px; border:1.5px solid %(checkboxborder)s; border-radius:4px; background:%(dropdownbg)s; }
+QCheckBox::indicator { width:18px; height:18px; border:1.5px solid %(checkboxborder)s; border-radius:4px; background:%(dropdownbg)s; }
 QCheckBox::indicator:hover { border-color:%(accent)s; }
-QCheckBox::indicator:checked { background:white; border-color:%(accent)s; image:url(data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M3 8l3 3 7-7' stroke='%(accent)s' stroke-width='2' fill='none'/></svg>); }
+QCheckBox::indicator:disabled { border-color:%(border2)s; background:%(dropdownbg)s; }
+QCheckBox::indicator:checked { background:%(accent)s; border-color:%(accent)s; %(checkimg)s }
+QCheckBox::indicator:indeterminate { background:%(accent)s; border-color:%(accent)s; background-image:none; }
 
 /* ── 工具提示 ── */
 QToolTip { background:%(dropdownbg)s; color:%(text)s; border:1px solid %(border2)s; border-radius:6px; padding:6px 10px; font-size:12px; }
 
 QDialog { background:%(bg)s; }
 """
+
+# ── 复选框勾选图标 ──────────────────────────────────────────────
+# Qt 5.15 的 QSS 无法渲染 SVG data URI：只要 url() 里有 data:image/svg+xml，
+# 整条 :checked 规则都会被丢弃（表现为勾选后毫无变化）。因此这里在启动时
+# 把一张白色对勾 PNG 写到缓存目录，QSS 用绝对路径引用它。
+_CHECK_ICON_B64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAACXBIWXMAAA9hAAAPYQGoP6dpAAAAiUlEQVQokd3Q"
+    "oQ5BYRgG4HNsmmCqhqxopsuaLkqKaxFcCRfADZgr0GwmED2Cb3PCMf8Jijf9+/Y+2/f9WfZfQY45ZlXh0itX1FLR"
+    "BI+Ai7LCFGu0CrMB7oFWyMvgNgp7NNDGKWYb1D+t1Mclijsc4n1E89s9Q9y8c0Y39TPGBThKQgXcQ6cS+nmeV46r"
+    "G6EzKwQAAAAASUVORK5CYII="
+)
+
+
+def _ensure_check_icon():
+    """将白色对勾 PNG 写入本地缓存，返回 QSS 可直接引用的路径（正斜杠）。"""
+    try:
+        data = base64.b64decode(_CHECK_ICON_B64)
+        base = os.path.join(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir(),
+                            "FileCare", "ui")
+        os.makedirs(base, exist_ok=True)
+        path = os.path.join(base, "check.png")
+        if not (os.path.isfile(path) and open(path, "rb").read() == data):
+            with open(path, "wb") as f:
+                f.write(data)
+        return path.replace("\\", "/")
+    except Exception:
+        return ""
+
+
+_CHECK_ICON_URL = _ensure_check_icon()
+# 勾选态的背景图声明；若图标写入失败则退化为纯蓝色填充（仍然可见）
+_CHECK_IMG_RULE = (
+    "background-image:url(%s);background-repeat:no-repeat;background-position:center;"
+    % _CHECK_ICON_URL
+) if _CHECK_ICON_URL else ""
 
 # 浅色主题颜色字典（供 STYLESHEET 模板填充）
 _LIGHT_COLORS = {
@@ -449,6 +499,7 @@ _LIGHT_COLORS = {
     "altrow": M_ALT_ROW, "menuseltext": M_MENU_SEL_TEXT,
     "progressend": M_PROGRESS_END, "scrollbar": M_SCROLLBAR,
     "scrollbarhover": M_SCROLLBAR_HOVER, "checkboxborder": M_CHECKBOX_BORDER,
+    "checkimg": _CHECK_IMG_RULE,
 }
 
 # 初始样式表（浅色，供模块加载时使用；_apply_theme() 会覆盖）
@@ -478,6 +529,7 @@ class DiskMonitor(QMainWindow):
         self.file_operations = FileOperations(os.path.join(os.path.expanduser("~"), ".diskwise", "recycle_bin"))
         self.quick_search_engine = QuickSearchEngine()
         self.fulltext_search_engine = FullTextSearchEngine()
+        self._active_index_db_path = get_settings().get("scan", "index_db_path", "")
         self.content_extractor = ContentExtractor()
         self._app_settings = QtCore.QSettings("FileCare", "FileCare")
         self._search_timer = None
@@ -490,10 +542,9 @@ class DiskMonitor(QMainWindow):
         self._update_disk_usage()
         # 首次建库提示与后台增量更新分开进行，避免阻塞主界面。
         QtCore.QTimer.singleShot(350, self._show_first_index_notice)
-        QtCore.QTimer.singleShot(1000, self._auto_rebuild_index_on_startup)
-        
-        # 启动时自动扫描索引（如果设置开启）
-        if self._settings.get("general", "auto_scan_on_start", False):
+        # 首次使用必须建立索引；后续是否自动刷新由设置决定。
+        if (not self.quick_search_engine.is_indexed or
+                self._settings.get("general", "auto_scan_on_start", False)):
             QtCore.QTimer.singleShot(2000, self._auto_start_scan)
         
         # 设置自动扫描定时器
@@ -507,7 +558,11 @@ class DiskMonitor(QMainWindow):
         self._tray_manager.quit_requested.connect(self._tray_quit)
         self._tray_manager.scan_requested.connect(self._tray_scan)
         self._tray_manager.settings_requested.connect(self._show_settings_view)
+        self._tray_manager.update_requested.connect(self._check_update_from_tray)
         self._tray_manager.show()
+
+        # 启动后在后台自动检查更新（是否启用由「设置 - 软件更新」决定）
+        QtCore.QTimer.singleShot(5000, self._auto_check_update_on_startup)
 
     def _icon(self, enum):
         return self.style().standardIcon(enum)
@@ -895,6 +950,7 @@ class DiskMonitor(QMainWindow):
         # 工具栏
         toolbar_row = QHBoxLayout()
         self._rb_select_all_cb = QtWidgets.QCheckBox()
+        self._rb_select_all_cb.setTristate(True)  # 启用三态：未选中/部分选中/全选
         self._rb_select_all_cb.stateChanged.connect(self._rb_toggle_select_all)
         toolbar_row.addWidget(self._rb_select_all_cb)
         self._rb_selected_label = QLabel("")
@@ -909,18 +965,25 @@ class DiskMonitor(QMainWindow):
         btn_del = QPushButton(); self._register_text("rb_delete_selected", btn_del)
         btn_del.setObjectName("danger")
         btn_del.clicked.connect(self._rb_delete_selected)
+        self._rb_btn_delete = btn_del
         btn_restore = QPushButton(); self._register_text("rb_restore_selected", btn_restore)
         btn_restore.setObjectName("primary")
         btn_restore.clicked.connect(self._rb_restore_selected)
+        self._rb_btn_restore = btn_restore
         btn_empty = QPushButton(); self._register_text("rb_empty", btn_empty)
         btn_empty.setObjectName("dangerSolid")
         btn_empty.clicked.connect(self._rb_empty_bin)
+        self._rb_btn_empty = btn_empty
+        # 初始禁用恢复和删除按钮，选中项目后启用
+        self._rb_btn_restore.setEnabled(False)
+        self._rb_btn_delete.setEnabled(False)
         for b in (btn_select_all, btn_deselect, btn_del, btn_restore, btn_empty):
             toolbar_row.addWidget(b)
         outer.addLayout(toolbar_row)
 
         # 回收站表格
         self._rb_tree = QTreeWidget()
+        self._rb_tree.setObjectName("recycleTree")
         self._rb_tree.setColumnCount(6)
         self._rb_tree.setRootIsDecorated(False)
         self._rb_tree.setAlternatingRowColors(True)
@@ -939,43 +1002,24 @@ class DiskMonitor(QMainWindow):
         return page
 
     def _rb_load_items(self):
-        """读取回收站目录 + 元数据，填充表格和汇总卡片。"""
+        """读取 Windows 系统回收站，填充表格和汇总卡片。"""
         self._rb_tree.clear()
-        recycle_path = self.file_operations.recycle_bin_path
-        entries = []
-        if os.path.isdir(recycle_path):
-            for name in sorted(os.listdir(recycle_path)):
-                if name.endswith(".meta.json"):
-                    continue
-                full = os.path.join(recycle_path, name)
-                try:
-                    if os.path.isdir(full):
-                        size = self._folder_size(full)
-                    else:
-                        size = os.path.getsize(full)
-                    mtime = os.path.getmtime(full)
-                except OSError:
-                    continue
-                origin = ""
-                deleted_at = mtime
-                meta_path = full + ".meta.json"
-                if os.path.isfile(meta_path):
-                    try:
-                        with open(meta_path, "r", encoding="utf-8") as fh:
-                            meta = json.load(fh)
-                        origin = meta.get("origin_path", "")
-                        deleted_at = float(meta.get("deleted_at", mtime))
-                    except (OSError, ValueError):
-                        pass
-                entries.append({
-                    "name": name, "path": full, "origin": origin,
-                    "size": size, "mtime": mtime, "deleted_at": deleted_at,
-                })
+        # 修复：清空旧项可能触发 stateChanged 导致残留引用
+        self._rb_select_all_cb.blockSignals(True)
+        self._rb_select_all_cb.setChecked(False)
+        self._rb_select_all_cb.blockSignals(False)
+
+        try:
+            entries = WindowsRecycleBin.get_items()
+        except Exception as exc:
+            QMessageBox.warning(self, "加载回收站失败", f"无法读取 Windows 系统回收站：\n{exc}")
+            entries = []
 
         now = time.time()
-        total_size = sum(e["size"] for e in entries)
-        oldest_days = int((now - min((e["deleted_at"] for e in entries), default=now)) / 86400) if entries else 0
-        new_week = sum(1 for e in entries if now - e["deleted_at"] <= 7 * 86400)
+        total_size = sum(e["size_bytes"] for e in entries)
+        oldest_ts = min((e["deleted_ts"] for e in entries if e["deleted_ts"] > 0), default=now)
+        oldest_days = int((now - oldest_ts) / 86400) if entries else 0
+        new_week = sum(1 for e in entries if e["deleted_ts"] > 0 and now - e["deleted_ts"] <= 7 * 86400)
         self._rb_summary_labels["rb_files_count"].setText(f"{len(entries):,}")
         self._rb_summary_labels["rb_space_used"].setText(format_size(total_size))
         self._rb_summary_labels["rb_oldest"].setText(
@@ -984,29 +1028,41 @@ class DiskMonitor(QMainWindow):
         self._rb_summary_labels["rb_new_this_week"].setStyleSheet(
             f"font-size:24px; font-weight:700; color:{M_RED if new_week else M_TEXT};")
 
+        if not entries:
+            self._rb_update_selected_label()
+            return
+
         for e in entries:
-            item = QTreeWidgetItem(["", e["name"], e["origin"] or "—",
-                                    format_size(e["size"]), format_time(e["deleted_at"]), ""])
-            item.setData(0, Qt.UserRole, e["path"])
-            item.setData(1, Qt.UserRole, e["origin"])
-            item.setToolTip(2, e["origin"] or "")
+            item = QTreeWidgetItem(["", e["name"], e["origin_path"] or "—",
+                                    format_size(e["size_bytes"]), e["deleted_date"], ""])
+            # 存储索引和原路径
+            item.setData(0, Qt.UserRole, e["index"])
+            item.setData(1, Qt.UserRole, e["origin_path"])
+            item.setData(2, Qt.UserRole, e["name"])
+            item.setToolTip(2, e["origin_path"] or "")
+            item.setSizeHint(0, QtCore.QSize(0, 48))
+            item.setSizeHint(5, QtCore.QSize(0, 48))
             self._rb_tree.addTopLevelItem(item)
 
             cb = QtWidgets.QCheckBox()
-            cb.stateChanged.connect(lambda *_: self._rb_update_selected_label())
+            cb.stateChanged.connect(lambda *_a: self._rb_update_selected_label())
             self._rb_tree.setItemWidget(item, 0, cb)
 
             actions = QWidget()
             al = QHBoxLayout(actions)
-            al.setContentsMargins(4, 2, 4, 2)
+            al.setContentsMargins(4, 4, 4, 4)
             al.setSpacing(6)
             restore_btn = QPushButton(self._tr("rb_restore"))
-            restore_btn.setObjectName("success")
-            restore_btn.setFixedHeight(26)
+            restore_btn.setObjectName("rbRestoreAction")
+            restore_btn.setIcon(self._icon(QtWidgets.QStyle.SP_ArrowBack))
+            restore_btn.setIconSize(QtCore.QSize(14, 14))
+            restore_btn.setFixedHeight(30)
             restore_btn.clicked.connect(lambda *_u, it=item: self._rb_restore_one(it))
             delete_btn = QPushButton(self._tr("rb_permanent"))
-            delete_btn.setObjectName("danger")
-            delete_btn.setFixedHeight(26)
+            delete_btn.setObjectName("rbDeleteAction")
+            delete_btn.setIcon(self._icon(QtWidgets.QStyle.SP_TrashIcon))
+            delete_btn.setIconSize(QtCore.QSize(14, 14))
+            delete_btn.setFixedHeight(30)
             delete_btn.clicked.connect(lambda *_u, it=item: self._rb_delete_one(it))
             al.addWidget(restore_btn)
             al.addWidget(delete_btn)
@@ -1028,10 +1084,33 @@ class DiskMonitor(QMainWindow):
 
     def _rb_update_selected_label(self):
         n = len(self._rb_checked_items())
+        total = self._rb_tree.topLevelItemCount()
         self._rb_selected_label.setText(self._tr("rb_selected_n").replace("{n}", str(n)))
+        # Enable/disable restore and delete buttons based on selection
+        has_selection = n > 0
+        self._rb_btn_restore.setEnabled(has_selection)
+        self._rb_btn_delete.setEnabled(has_selection)
+        
+        # 更新全选复选框状态：全选=Checked, 部分选=PartiallyChecked, 未选=Unchecked
+        if total == 0:
+            state = Qt.Unchecked
+        elif n == 0:
+            state = Qt.Unchecked
+        elif n == total:
+            state = Qt.Checked
+        else:
+            state = Qt.PartiallyChecked
+        
+        self._rb_select_all_cb.blockSignals(True)
+        self._rb_select_all_cb.setCheckState(state)
+        self._rb_select_all_cb.blockSignals(False)
 
     def _rb_toggle_select_all(self, state):
-        self._rb_set_all(state == Qt.Checked)
+        # 点击全选复选框：如果当前是部分选中，则全部选中；否则根据新状态切换
+        if self._rb_select_all_cb.checkState() == Qt.PartiallyChecked:
+            self._rb_set_all(True)
+        else:
+            self._rb_set_all(state == Qt.Checked)
 
     def _rb_set_all(self, checked):
         for i in range(self._rb_tree.topLevelItemCount()):
@@ -1043,29 +1122,13 @@ class DiskMonitor(QMainWindow):
         self._rb_update_selected_label()
 
     def _rb_restore_one(self, item):
-        path = item.data(0, Qt.UserRole)
-        origin = item.data(1, Qt.UserRole) or ""
-        if not path or not os.path.lexists(path):
-            QMessageBox.warning(self, "恢复失败", "该项目已不存在。")
+        index = item.data(0, Qt.UserRole)
+        name = item.data(2, Qt.UserRole) or ""
+        if index is None:
+            QMessageBox.warning(self, "恢复失败", "无法获取该项目信息。")
             return
-        name = os.path.basename(path.rstrip(os.sep))
-        if origin:
-            target_dir = os.path.dirname(origin)
-            target = origin
-        else:
-            target_dir = os.path.join(os.path.expanduser("~"), "Desktop")
-            target = os.path.join(target_dir, name)
-        if os.path.exists(target) and QMessageBox.question(
-                self, "恢复确认", f"目标位置已存在同名文件：\n{target}\n\n覆盖它吗？",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
-            return
-        ok, msg = self.file_ops.restore_from_recycle_bin(path, target)
+        ok, msg = WindowsRecycleBin.restore_item(index)
         if ok:
-            # 清理元数据文件
-            try:
-                os.remove(path + ".meta.json")
-            except OSError:
-                pass
             self._rb_load_items()
         else:
             QMessageBox.critical(self, "恢复失败", msg)
@@ -1075,31 +1138,49 @@ class DiskMonitor(QMainWindow):
         if not items:
             QMessageBox.information(self, "提示", "请先勾选要恢复的项目")
             return
+        # Collect indices first, then process in reverse order to avoid index shift
+        indices = []
         for item in items:
-            self._rb_restore_one(item)
+            index = item.data(0, Qt.UserRole)
+            if index is not None:
+                indices.append(index)
+        
+        indices.sort(reverse=True)
+        
+        success_count = 0
+        fail_count = 0
+        for index in indices:
+            try:
+                ok, msg = WindowsRecycleBin.restore_item(index)
+                if ok:
+                    success_count += 1
+                else:
+                    fail_count += 1
+            except Exception:
+                fail_count += 1
+        
+        self._rb_load_items()
+        
+        if fail_count == 0:
+            QMessageBox.information(self, "恢复成功", f"已恢复 {success_count} 个项目")
+        else:
+            QMessageBox.warning(self, "部分恢复", f"成功恢复 {success_count} 个项目，失败 {fail_count} 个")
 
     def _rb_delete_one(self, item):
-        path = item.data(0, Qt.UserRole)
-        if not path:
+        index = item.data(0, Qt.UserRole)
+        name = item.data(2, Qt.UserRole) or ""
+        if index is None:
             return
-        name = os.path.basename(path.rstrip(os.sep))
         if QMessageBox.question(
                 self, "确认永久删除",
                 f"永久删除后无法恢复：\n{name}\n\n确定继续吗？",
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
             return
-        try:
-            if os.path.isdir(path) and not os.path.islink(path):
-                shutil.rmtree(path)
-            else:
-                os.remove(path)
-            try:
-                os.remove(path + ".meta.json")
-            except OSError:
-                pass
+        ok, msg = WindowsRecycleBin.delete_item(index)
+        if ok:
             self._rb_load_items()
-        except Exception as exc:
-            QMessageBox.critical(self, "删除失败", str(exc))
+        else:
+            QMessageBox.critical(self, "删除失败", msg)
 
     def _rb_delete_selected(self):
         items = self._rb_checked_items()
@@ -1111,20 +1192,34 @@ class DiskMonitor(QMainWindow):
                 f"将永久删除选中的 {len(items)} 个项目，此操作不可恢复。\n\n确定继续吗？",
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
             return
+        
+        # Collect indices first, then process in reverse order to avoid index shift
+        indices = []
         for item in items:
-            path = item.data(0, Qt.UserRole)
+            index = item.data(0, Qt.UserRole)
+            if index is not None:
+                indices.append(index)
+        
+        indices.sort(reverse=True)
+        
+        success_count = 0
+        fail_count = 0
+        for index in indices:
             try:
-                if path and os.path.isdir(path) and not os.path.islink(path):
-                    shutil.rmtree(path)
-                elif path:
-                    os.remove(path)
-                try:
-                    os.remove(path + ".meta.json")
-                except OSError:
-                    pass
+                ok, msg = WindowsRecycleBin.delete_item(index)
+                if ok:
+                    success_count += 1
+                else:
+                    fail_count += 1
             except Exception:
-                continue
+                fail_count += 1
+        
         self._rb_load_items()
+        
+        if fail_count == 0:
+            QMessageBox.information(self, "删除成功", f"已永久删除 {success_count} 个项目")
+        else:
+            QMessageBox.warning(self, "部分删除", f"成功删除 {success_count} 个项目，失败 {fail_count} 个")
 
     def _rb_empty_bin(self):
         if self._rb_tree.topLevelItemCount() == 0:
@@ -1134,7 +1229,7 @@ class DiskMonitor(QMainWindow):
                 self, "清空回收站", "确定清空回收站中的全部项目吗？\n此操作不可恢复。",
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
             return
-        ok, msg = self.file_ops.empty_recycle_bin()
+        ok, msg = WindowsRecycleBin.empty_bin()
         (QMessageBox.information if ok else QMessageBox.critical)(self, "清空回收站", msg)
         self._rb_load_items()
 
@@ -2263,7 +2358,7 @@ class DiskMonitor(QMainWindow):
                 "advice": self._deletion_advice(path, is_dir, identity),
             }
             for key, value in values.items(): self._info_labels[key].setText(value); self._info_labels[key].setToolTip(value)
-            
+
             # 更新预览面板
             if hasattr(self, '_detail_preview_text'):
                 if is_dir:
@@ -2325,23 +2420,24 @@ class DiskMonitor(QMainWindow):
 
     def _delete_path(self, path):
         if not path: return False
+        use_system_recycle = self._settings.get(
+            "cleanup", "use_system_recycle", True)
         # 读取设置：是否删除前确认
         confirm_before_delete = self._settings.get("cleanup", "confirm_before_delete", True)
         if confirm_before_delete:
-            if QMessageBox.question(self, "确认移至回收站", f"确定要移动以下项目吗？\n\n{path}", QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes: return False
-        
-        # 读取设置：是否使用系统回收站
-        use_system_recycle = self._settings.get("cleanup", "use_system_recycle", True)
+            title = "确认移至回收站" if use_system_recycle else "确认永久删除"
+            action = ("移至系统回收站" if use_system_recycle
+                      else "永久删除（无法恢复）")
+            if QMessageBox.question(
+                    self, title, f"确定要{action}以下项目吗？\n\n{path}",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No) != QMessageBox.Yes:
+                return False
         
         if use_system_recycle:
-            # 先尝试普通方式
-            ok, message = self.file_operations.move_to_recycle_bin(path)
-            
-            # 权限不足时使用 Windows Shell API（会弹出 UAC 授权，无需重启）
-            if not ok and "没有权限" in message:
-                ok = self._windows_shell_delete(path, allow_undo=True)
-                if ok:
-                    message = "已成功移至回收站"
+            ok = self._windows_shell_delete(path, allow_undo=True)
+            message = ("已成功移至系统回收站" if ok
+                       else "移入系统回收站失败")
         else:
             # 直接永久删除
             try:
@@ -2547,10 +2643,16 @@ class DiskMonitor(QMainWindow):
         self._set_active_tab(6)
 
     def _on_settings_saved(self):
-        """设置保存后的回调"""
-        # 这里可以添加设置生效后的刷新逻辑
-        # 例如：更新界面主题、重新加载配置等
-        pass
+        """设置保存后立即应用定时器和索引路径。"""
+        self._setup_auto_scan_timer()
+        configured_path = self._settings.get("scan", "index_db_path", "")
+        if configured_path != self._active_index_db_path:
+            self.quick_search_engine.close()
+            self.fulltext_search_engine.close()
+            self.quick_search_engine = QuickSearchEngine()
+            self.fulltext_search_engine = FullTextSearchEngine()
+            self._active_index_db_path = configured_path
+            self._update_search_index_status()
 
     def _show_detail_view(self):
         """兼容旧调用：跳转到文件管理视图"""
@@ -2581,21 +2683,22 @@ class DiskMonitor(QMainWindow):
         self._scan_start.setEnabled(False); self._scan_cancel.setEnabled(True); self._scan_progress.setRange(0, 0); self._scan_status.setText((f"Scanning: {self._scan_path}" if self.language == "en" else f"正在扫描：{self._scan_path}")); self._scanner_thread.start()
 
     def _auto_start_scan(self):
-        """启动时自动扫描索引"""
-        if self._scanner_thread and self._scanner_thread.isRunning():
+        """在后台增量刷新文件名索引。"""
+        if self.quick_search_engine.is_indexing():
             return
-        # 自动扫描时使用默认路径和设置
-        threshold_mb = self._settings.get("cleanup", "large_file_threshold_mb", 100)
-        folder_threshold_mb = self._settings.get("cleanup", "large_folder_threshold_mb", 1024)
-        exclude_dirs = self._settings.get("scan", "exclude_dirs", [])
-        exclude_patterns = self._settings.get("scan", "exclude_patterns", [])
-        self._scanner_thread = DiskScannerThread(self.current_path, threshold_mb, folder_threshold_mb, self._top_n.value(), exclude_dirs, exclude_patterns)
-        self._scanner_thread.progress_signal.connect(self._scan_progress_update)
-        self._scanner_thread.status_signal.connect(self._scan_status_update)
-        self._scanner_thread.finished_signal.connect(self._scan_finished)
-        self._scanner_thread.error_signal.connect(lambda msg: QMessageBox.warning(self, "扫描错误", msg))
-        self._scan_status.setText(f"正在自动扫描：{self.current_path}")
-        self._scanner_thread.start()
+        thread = self.quick_search_engine.start_indexing(incremental=True)
+        thread.progress_signal.connect(self._on_name_index_progress)
+        thread.finished_signal.connect(self._on_name_index_finished)
+        thread.cancelled_signal.connect(self._on_name_index_cancelled)
+        thread.error_signal.connect(
+            lambda msg: QMessageBox.warning(self, "索引错误", msg))
+
+    def _on_auto_scan_timer_tick(self):
+        """按天计数，避免 Qt5 定时器的 32 位毫秒上限。"""
+        self._auto_scan_elapsed_days += 1
+        if self._auto_scan_elapsed_days >= self._auto_scan_target_days:
+            self._auto_scan_elapsed_days = 0
+            self._auto_start_scan()
 
     def _setup_auto_scan_timer(self):
         """设置自动扫描定时器"""
@@ -2610,16 +2713,14 @@ class DiskMonitor(QMainWindow):
         if interval == "off":
             return
         
+        target_days = {"daily": 1, "weekly": 7, "monthly": 30}
+        if interval not in target_days:
+            return
+        self._auto_scan_target_days = target_days[interval]
+        self._auto_scan_elapsed_days = 0
         self._auto_scan_timer = QtCore.QTimer(self)
-        self._auto_scan_timer.timeout.connect(self._auto_start_scan)
-        
-        # 设置间隔时间（毫秒）
-        if interval == "daily":
-            self._auto_scan_timer.start(24 * 60 * 60 * 1000)  # 24小时
-        elif interval == "weekly":
-            self._auto_scan_timer.start(7 * 24 * 60 * 60 * 1000)  # 7天
-        elif interval == "monthly":
-            self._auto_scan_timer.start(30 * 24 * 60 * 60 * 1000)  # 30天
+        self._auto_scan_timer.timeout.connect(self._on_auto_scan_timer_tick)
+        self._auto_scan_timer.start(24 * 60 * 60 * 1000)
 
     def _cancel_scan(self):
         if self._scanner_thread and self._scanner_thread.isRunning(): self._scanner_thread.cancel(); self._scan_status.setText("Cancelling scan safely..." if self.language == "en" else "正在安全取消扫描..."); self._scan_cancel.setEnabled(False)
@@ -2839,7 +2940,7 @@ class DiskMonitor(QMainWindow):
             return
         moved = 0
         for path in paths:
-            ok, _ = self.file_operations.move_to_recycle_bin(path)
+            ok = self._windows_shell_delete(path, allow_undo=True)
             if ok:
                 moved += 1
                 item = next((i for i in items if i.data(0, Qt.UserRole) == path), None)
@@ -2901,6 +3002,35 @@ class DiskMonitor(QMainWindow):
         self._force_quit = True
         self.close()
 
+    def prepare_for_update(self):
+        """更新前真正退出程序。
+
+        安装程序需要替换程序文件，并且会在安装完成后重新打开本程序，
+        因此这里必须走「真正退出」而不是最小化到托盘。
+        名称由 update_dialog 按名调用。
+        """
+        self._force_quit = True
+        self.close()
+
+    def _check_update_from_tray(self):
+        """托盘菜单「检查更新」：先把窗口显示出来，再检查更新。"""
+        self._tray_show_window()
+        check_and_prompt(self, notify_when_latest=True, show_errors=True)
+
+    def _auto_check_update_on_startup(self):
+        """启动时的自动检查更新。
+
+        只在「设置 - 软件更新」选择「自动检查」时执行；
+        已是最新或检查失败都保持安静，只有发现新版本才会提示。
+        """
+        try:
+            mode = get_settings().get("advanced", "check_update", "auto")
+        except Exception:
+            mode = "auto"
+        if mode != "auto":
+            return
+        check_and_prompt(self, notify_when_latest=False, show_errors=False)
+
     def _tray_scan(self, scan_type):
         """从托盘菜单触发扫描"""
         if scan_type == "all":
@@ -2932,6 +3062,11 @@ class DiskMonitor(QMainWindow):
             self.quick_search_engine.close()
             self.fulltext_search_engine.close()
             
+            # 停止自动扫描定时器
+            if hasattr(self, '_auto_scan_timer') and self._auto_scan_timer:
+                self._auto_scan_timer.stop()
+                self._auto_scan_timer = None
+
             # 清理托盘图标
             if hasattr(self, '_tray_manager') and self._tray_manager:
                 self._tray_manager.cleanup()
@@ -2943,7 +3078,8 @@ class DiskMonitor(QMainWindow):
             # 检查设置：是否关闭到托盘
             close_to_tray = self._settings.get("general", "close_to_tray", True)
             
-            if close_to_tray and hasattr(self, '_tray_manager') and self._tray_manager:
+            if (close_to_tray and hasattr(self, '_tray_manager') and
+                    self._tray_manager and self._tray_manager.is_available()):
                 # 最小化到托盘
                 self.hide()
                 self._tray_manager.show_message(
@@ -2964,6 +3100,11 @@ class DiskMonitor(QMainWindow):
                     self._viz_scanner_thread.wait()
                 self.quick_search_engine.close()
                 self.fulltext_search_engine.close()
+
+                # 停止自动扫描定时器
+                if hasattr(self, '_auto_scan_timer') and self._auto_scan_timer:
+                    self._auto_scan_timer.stop()
+                    self._auto_scan_timer = None
                 
                 if hasattr(self, '_tray_manager') and self._tray_manager:
                     self._tray_manager.cleanup()

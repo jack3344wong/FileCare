@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import fnmatch
 import os
 import time
 from collections import defaultdict
@@ -107,8 +108,14 @@ class DiskScannerThread(QThread):
         self.threshold_bytes = max(0, int(float(threshold_mb) * 1024 * 1024))
         self.folder_threshold_bytes = max(0, int(float(folder_threshold_mb) * 1024 * 1024))
         self.top_n = max(1, int(top_n))
-        self.exclude_dirs = [os.path.normcase(d) for d in (exclude_dirs or [])]
-        self.exclude_patterns = [p.lower() for p in (exclude_patterns or [])]
+        self.exclude_dirs = [
+            os.path.normcase(os.path.abspath(os.path.normpath(d)))
+            for d in (exclude_dirs or []) if isinstance(d, str) and d.strip()
+        ]
+        self.exclude_patterns = [
+            p.casefold() for p in (exclude_patterns or [])
+            if isinstance(p, str) and p.strip()
+        ]
         self._cancel_requested = False
 
     def cancel(self):
@@ -151,9 +158,15 @@ class DiskScannerThread(QThread):
                 kept_dirs = []
                 for name in dirs:
                     full = os.path.join(root, name)
-                    # 排除目录检查
-                    if self.exclude_dirs and os.path.normcase(full) in self.exclude_dirs:
-                        continue
+                    # 排除目录检查（含子目录匹配）
+                    if self.exclude_dirs:
+                        norm_full = os.path.normcase(os.path.abspath(os.path.normpath(full)))
+                        if any(
+                            norm_full == ex or norm_full.startswith(
+                                ex if ex.endswith(os.sep) else ex + os.sep)
+                            for ex in self.exclude_dirs
+                        ):
+                            continue
                     try:
                         st = os.stat(full, follow_symlinks=False)
                         attrs = getattr(st, "st_file_attributes", 0)
@@ -178,8 +191,9 @@ class DiskScannerThread(QThread):
                         break
                     # 排除文件类型检查
                     if self.exclude_patterns:
-                        ext = os.path.splitext(name)[1].lower()
-                        if any(ext == pattern or ext == f".{pattern}" for pattern in self.exclude_patterns):
+                        folded_name = name.casefold()
+                        if any(fnmatch.fnmatchcase(folded_name, pattern)
+                               for pattern in self.exclude_patterns):
                             continue
                     path = os.path.join(root, name)
                     try:

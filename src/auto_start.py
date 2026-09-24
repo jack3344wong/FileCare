@@ -26,43 +26,50 @@ def get_executable_path():
 
 def is_auto_start_enabled():
     """检查是否已启用开机自启动"""
+    key = None
     try:
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_PATH, 0, winreg.KEY_READ)
-        try:
-            winreg.QueryValueEx(key, APP_NAME)
-            winreg.CloseKey(key)
-            return True
-        except FileNotFoundError:
-            winreg.CloseKey(key)
-            return False
+        winreg.QueryValueEx(key, APP_NAME)
+        return True
+    except FileNotFoundError:
+        return False
     except Exception:
         return False
+    finally:
+        if key is not None:
+            winreg.CloseKey(key)
 
 
 def enable_auto_start():
     """启用开机自启动"""
+    key = None
     try:
         exe_path = get_executable_path()
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_PATH, 0, winreg.KEY_SET_VALUE)
         winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, exe_path)
-        winreg.CloseKey(key)
         return True, "已启用开机自启动"
     except Exception as e:
         return False, f"启用失败: {str(e)}"
+    finally:
+        if key is not None:
+            winreg.CloseKey(key)
 
 
 def disable_auto_start():
     """禁用开机自启动"""
+    key = None
     try:
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_PATH, 0, winreg.KEY_SET_VALUE)
         try:
             winreg.DeleteValue(key, APP_NAME)
         except FileNotFoundError:
             pass
-        winreg.CloseKey(key)
         return True, "已禁用开机自启动"
     except Exception as e:
         return False, f"禁用失败: {str(e)}"
+    finally:
+        if key is not None:
+            winreg.CloseKey(key)
 
 
 def set_auto_start(enabled):

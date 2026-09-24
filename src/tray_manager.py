@@ -18,6 +18,7 @@ class TrayManager(QObject):
     quit_requested = pyqtSignal()  # 请求退出程序
     scan_requested = pyqtSignal(str)  # 请求扫描（参数：扫描类型）
     settings_requested = pyqtSignal()  # 请求打开设置
+    update_requested = pyqtSignal()  # 请求检查更新
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -89,9 +90,9 @@ class TrayManager(QObject):
         action_settings.triggered.connect(self._on_settings)
         self.tray_menu.addAction(action_settings)
         
-        # 检查更新（预留）
+        # 检查更新
         action_update = QAction("检查更新", self)
-        action_update.setEnabled(False)  # 暂时禁用
+        action_update.triggered.connect(self.update_requested.emit)
         self.tray_menu.addAction(action_update)
         
         self.tray_menu.addSeparator()
@@ -154,9 +155,15 @@ class TrayManager(QObject):
     def is_visible(self):
         """托盘图标是否可见"""
         return self._visible
+
+    def is_available(self):
+        """系统托盘是否已成功初始化。"""
+        return self.tray_icon is not None
         
     def cleanup(self):
         """清理资源"""
         if self.tray_icon:
             self.tray_icon.hide()
+            self.tray_icon.deleteLater()
             self.tray_icon = None
+        self._visible = False

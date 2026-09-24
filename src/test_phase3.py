@@ -41,7 +41,9 @@ class RegressionTests(unittest.TestCase):
             old_log.write_bytes(b"y" * 2048)
             old = time.time() - 100 * 86400
             os.utime(old_log, (old, old))
-            scanner = DiskScannerThread(str(root), threshold_mb=0.001, top_n=20)
+            scanner = DiskScannerThread(
+                str(root), threshold_mb=0.001,
+                folder_threshold_mb=0.001, top_n=20)
             received = []
             scanner.finished_signal.connect(received.append)
             scanner.start()

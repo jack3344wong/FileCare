@@ -72,53 +72,6 @@ def _start_local_server(app):
     return server
 
 
-def _handle_admin_delete_on_startup():
-    """启动时检查是否有待删除的文件（管理员权限模式）"""
-    temp_file = Path(os.environ.get('TEMP', '')) / 'filecare_admin_delete.txt'
-    if not temp_file.exists():
-        return
-    
-    try:
-        with open(temp_file, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-            if len(lines) < 2:
-                temp_file.unlink(missing_ok=True)
-                return
-            
-            mode = lines[0].strip()
-            target_path = lines[1].strip()
-        
-        # 删除临时文件
-        temp_file.unlink(missing_ok=True)
-        
-        # 检查文件是否存在
-        if not os.path.exists(target_path):
-            return
-        
-        # 执行删除操作
-        import shutil
-        if mode == 'recycle':
-            # 移入回收站
-            from file_operations import FileOperations
-            recycle_bin = Path.home() / ".diskwise" / "recycle_bin"
-            file_ops = FileOperations(str(recycle_bin))
-            success, message = file_ops.move_to_recycle_bin(target_path)
-            if success:
-                QMessageBox.information(None, "删除成功", f"已将文件移入回收站:\n{target_path}")
-            else:
-                QMessageBox.warning(None, "删除失败", message)
-        elif mode == 'permanent':
-            # 永久删除
-            if os.path.isdir(target_path):
-                shutil.rmtree(target_path)
-            else:
-                os.remove(target_path)
-            QMessageBox.information(None, "删除成功", f"已永久删除:\n{target_path}")
-    except Exception as e:
-        QMessageBox.critical(None, "管理员删除失败", f"执行管理员删除操作时出错:\n{e}")
-        temp_file.unlink(missing_ok=True)
-
-
 def main():
     if "--build-name-index" in sys.argv:
         # 安装器以当前登录用户身份运行，索引会正确写入该用户目录。
@@ -137,9 +90,6 @@ def main():
         print(f"Indexed {total} entries in {elapsed:.1f}s; errors={len(errors)}")
         return 0 if total > 0 else 2
 
-    # 检查是否以管理员权限启动，并处理待删除文件
-    _handle_admin_delete_on_startup()
-    
     # 检查是否已有实例在运行
     socket = QLocalSocket()
     socket.connectToServer(LOCAL_SERVER_NAME)
@@ -181,7 +131,9 @@ def main():
         # 读取启动时最小化设置
         from settings import get_settings
         settings = get_settings()
-        if minimized_mode or settings.get("general", "start_minimized", False):
+        can_minimize_to_tray = window._tray_manager.is_available()
+        if ((minimized_mode or settings.get("general", "start_minimized", False))
+                and can_minimize_to_tray):
             window.hide()  # 启动时隐藏窗口
         else:
             window.show()

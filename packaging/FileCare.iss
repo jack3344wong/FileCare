@@ -1,6 +1,6 @@
 #define MyAppNameZh "文件管家"
 #define MyAppNameEn "FileCare"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.3.0"
 #define MyAppExeName "FileCare.exe"
 
 [Setup]
@@ -8,9 +8,9 @@ AppId={{C72DBFB2-81A5-49E4-B32A-BBF7BFE6D9AF}
 AppName={#MyAppNameZh} ({#MyAppNameEn})
 AppVersion={#MyAppVersion}
 AppPublisher=FileCare Contributors
-AppPublisherURL=https://github.com/jack3344wong/diskwise
-AppSupportURL=https://github.com/jack3344wong/diskwise/issues
-AppUpdatesURL=https://github.com/jack3344wong/diskwise/releases
+AppPublisherURL=https://github.com/jack3344wong/FileCare
+AppSupportURL=https://github.com/jack3344wong/FileCare/issues
+AppUpdatesURL=https://github.com/jack3344wong/FileCare/releases
 DefaultDirName={autopf}\FileCare
 DefaultGroupName={#MyAppNameZh}
 DisableProgramGroupPage=yes
@@ -27,6 +27,11 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
+; 应用内「检查更新」会以 /SILENT 启动本安装程序，此时必须自动关闭正在运行的
+; 文件管家，否则程序文件被占用会导致复制失败。RestartApplications 关掉，
+; 重启改由 [Run] 段按 /UPDATE 参数执行，避免出现两个实例。
+CloseApplications=yes
+RestartApplications=no
 ; 发布目标：Windows 7 SP1 64 位及更新的 64 位 Windows。
 MinVersion=6.1sp1
 ArchitecturesAllowed=x64compatible
@@ -49,8 +54,11 @@ Name: "desktopicon"; Description: "创建桌面快捷方式 / Create a desktop s
 Name: "startmenuicon"; Description: "创建开始菜单文件夹 / Create a Start Menu folder"; GroupDescription: "附加选项 / Additional options:"
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Parameters: "--build-name-index --index-budget-seconds 20"; StatusMsg: "正在建立首批文件搜索索引…"; Flags: runhidden waituntilterminated runasoriginaluser
-Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppNameZh}"; Flags: nowait postinstall skipifsilent
+; 应用内「检查更新」触发的静默安装（带 /UPDATE）：跳过阻塞式的首批索引，
+; 安装完成后直接重新打开文件管家，索引由程序自己在后台增量构建。
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--build-name-index --index-budget-seconds 20"; StatusMsg: "正在建立首批文件搜索索引…"; Flags: runhidden waituntilterminated runasoriginaluser; Check: not IsUpdateInstall
+Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppNameZh}"; Flags: nowait postinstall skipifsilent; Check: not IsUpdateInstall
+Filename: "{app}\{#MyAppExeName}"; Flags: nowait; Check: IsUpdateInstall
 
 [Code]
 const
@@ -79,6 +87,26 @@ var
   NextLeft, NextTop, NextWidth, NextHeight: Integer;
   CancelLeft, CancelTop, CancelWidth, CancelHeight: Integer;
   NormalBorderStyle: TFormBorderStyle;
+
+{ 判断本次运行是否为应用内「检查更新」触发的静默安装。
+  更新流程以 /SILENT /UPDATE 启动本安装程序，此时 [Run] 段需要在安装
+  结束后自动重新打开文件管家，并跳过阻塞式的首批索引构建。 }
+function IsUpdateInstall: Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  if not WizardSilent then
+    Exit;
+  for I := 1 to ParamCount do
+  begin
+    if Uppercase(ParamStr(I)) = '/UPDATE' then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
+end;
 
 function SetTimer(hWnd: HWND; nIDEvent: UINT_PTR; uElapse: UINT;
   lpTimerFunc: NativeInt): UINT_PTR;
@@ -307,9 +335,11 @@ begin
     '  • 全文搜索索引' + #13#10 +
     '  • 回收站缓存' + #13#10 +
     '  • 用户配置文件' + #13#10 + #13#10 +
-    '选择"是"将完全清除所有数据，选择"否"将保留数据以便重新安装后复用。',
+    '选择“是”将完全清除所有数据，选择“否”将保留数据以便重新安装后复用。',
     '删除用户数据',
-    MB_YESNO or MB_ICONQUESTION
+    // Inno Setup 7 移除了全部 MB_ICON* 常量；带自定义标题的 MsgBox 重载
+    // 本身不接受图标类型参数，因此这里只保留标题 + 按钮。
+    MB_YESNO
   ) = IDYES;
 end;
 

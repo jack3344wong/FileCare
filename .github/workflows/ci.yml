@@ -34,3 +34,4 @@ jobs:
           python test_treemap_stress.py
           python test_treemap_visibility.py
           python test_ui_smoke.py
+          python test_update_core.py

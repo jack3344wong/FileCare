@@ -11,6 +11,7 @@ __pycache__/
 *_test_*/
 acceptance_*/
 scanner_test_*/
+_cbtest/
 
 # Generated handover notes and obsolete previews
 代码/PHASE*_*.md
@@ -23,6 +24,7 @@ scanner_test_*/
 build/
 dist/
 installer-output/
+installer-output-updatetest/
 python-3.8.10-amd64.exe
 *.spec.bak
 
